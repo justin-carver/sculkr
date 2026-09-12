@@ -97,7 +97,7 @@ pub struct Config {
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Secrets {
-    /// A CurseForge API key, the same value as `CF_API_KEY`.
+    /// A `CurseForge` API key, the same value as `CF_API_KEY`.
     pub cf_api_key: Option<Secret>,
 
     #[serde(flatten)]
@@ -177,7 +177,7 @@ impl Config {
     }
 }
 
-/// Where the CurseForge key in effect came from.
+/// Where the `CurseForge` key in effect came from.
 ///
 /// Reported by `sculkr config`, because "which of my three keys is this" is
 /// otherwise unanswerable without exposing the key itself.
@@ -268,7 +268,7 @@ impl Loaded {
                 .map(|key| format!("secrets.{key}")),
         );
 
-        for key in unknown.collect::<Vec<_>>() {
+        for key in unknown {
             loaded.warnings.push(format!(
                 "unknown key \"{key}\" in {CONFIG_FILE_NAME}; ignoring it"
             ));
@@ -293,7 +293,7 @@ impl Loaded {
         self.sources.push(file);
     }
 
-    /// The CurseForge key in effect, and where it came from.
+    /// The `CurseForge` key in effect, and where it came from.
     ///
     /// The environment wins over both files: a key exported on this machine
     /// belongs to whoever is sitting at it, while one in a `.sculk` may have

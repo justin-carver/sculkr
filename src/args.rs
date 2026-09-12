@@ -259,6 +259,7 @@ pub fn config(
     render_config(out, &Runtime::gather(cli, loaded))
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 /// Split from [`config`] so the layout can be tested without a pack, a cache,
 /// or a key in the environment. Yay, testing!
 fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<()> {
@@ -279,16 +280,20 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
             "  {:<12} {} {}",
             "Config:".bold(),
             format!("no {} file found", crate::config::CONFIG_FILE_NAME).yellow(),
-            match &rt.config_home {
-                Some(path) => format!("(create one at {})", path.display()).dimmed(),
-                None => "".dimmed(),
-            }
+            rt.config_home.as_ref().map_or_else(
+                || "".dimmed(),
+                |path| format!("(create one at {})", path.display()).dimmed()
+            )
         )?,
     }
-    writeln!(out, "  {:<12} {}", "Output:".bold(), match &rt.output {
-        Some(path) => path.display().to_string(),
-        None => "stdout".to_owned(),
-    })?;
+    writeln!(
+        out,
+        "  {:<12} {}",
+        "Output:".bold(),
+        rt.output
+            .as_ref()
+            .map_or_else(|| "stdout".to_owned(), |path| path.display().to_string())
+    )?;
     writeln!(out, "  {:<12} {}", "Format:".bold(), rt.format)?;
     writeln!(
         out,
@@ -359,7 +364,7 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
     Ok(())
 }
 
-pub(crate) fn about(out: &mut dyn std::io::Write) -> anyhow::Result<()> {
+pub fn about(out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     write_fancy_header(out, &format!("Companion CLI for {}", "packwiz".yellow()));
 
     writeln!(

@@ -144,7 +144,7 @@ impl Cache {
         self.is_dirty = true;
     }
 
-    pub fn get_data(&self) -> &CacheData {
+    pub const fn get_data(&self) -> &CacheData {
         &self.data
     }
 

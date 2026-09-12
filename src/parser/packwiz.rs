@@ -34,7 +34,7 @@ pub struct PackwizModUpdateCurseforge {
 
 /// Where packwiz fetches the jar from.
 ///
-/// CurseForge entries carry `mode = "metadata:curseforge"` and no `url`, since
+/// `CurseForge` entries carry `mode = "metadata:curseforge"` and no `url`, since
 /// the file is resolved through the API rather than downloaded directly.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all(deserialize = "kebab-case", serialize = "snake_case"))]
@@ -137,7 +137,8 @@ impl PackwizParser {
                 .map_err(|err| Error::TomlFile(path.clone(), err))?;
 
             parsed.category = entry.category().map(str::to_owned);
-            parsed.path = entry.file.clone();
+            // parsed.path = entry.file.clone();
+            parsed.path.clone_from(&entry.file);
 
             log::trace!("parsed \"{}\" as \"{}\"", entry.file.display(), parsed.name);
             parsed_mods.push(parsed);
@@ -166,7 +167,7 @@ impl PackwizParser {
             let path = entry.path();
 
             if !entry.file_name().to_string_lossy().ends_with(".pw.toml") {
-                skipped += 1;
+                skipped.saturating_add(1);
                 log::trace!("skipping non-pw.toml entry \"{}\"", path.display());
                 continue;
             }

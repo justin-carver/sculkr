@@ -176,7 +176,7 @@ impl App {
                         log::warn!(
                             "Modrinth returned unrequested project \"{}\"; ignoring",
                             m.id
-                        )
+                        );
                     }
                 }
             }
@@ -200,7 +200,7 @@ impl App {
                         log::warn!(
                             "CurseForge returned unrequested project \"{}\"; ignoring",
                             m.id
-                        )
+                        );
                     }
                 }
             }

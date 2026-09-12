@@ -100,37 +100,37 @@ impl Field {
         };
 
         match self {
-            Field::Id => Cow::Borrowed(m.id.as_str()),
-            Field::Slug => Cow::Borrowed(m.slug.as_str()),
-            Field::Name => Cow::Borrowed(m.title.as_str()),
-            Field::Description => Cow::Borrowed(m.description.as_str()),
-            Field::Url => Cow::Borrowed(m.mod_url.as_str()),
-            Field::IconUrl => optional(&m.icon_url),
-            Field::SourceUrl => optional(&m.source_url),
-            Field::IssuesUrl => optional(&m.issues_url),
-            Field::WikiUrl => optional(&m.wiki_url),
-            Field::License => match &m.license {
+            Self::Id => Cow::Borrowed(m.id.as_str()),
+            Self::Slug => Cow::Borrowed(m.slug.as_str()),
+            Self::Name => Cow::Borrowed(m.title.as_str()),
+            Self::Description => Cow::Borrowed(m.description.as_str()),
+            Self::Url => Cow::Borrowed(m.mod_url.as_str()),
+            Self::IconUrl => optional(&m.icon_url),
+            Self::SourceUrl => optional(&m.source_url),
+            Self::IssuesUrl => optional(&m.issues_url),
+            Self::WikiUrl => optional(&m.wiki_url),
+            Self::License => match &m.license {
                 Some(license) => Cow::Borrowed(license.name.as_str()),
                 None => Cow::Borrowed(""),
             },
-            Field::LicenseId => match &m.license {
+            Self::LicenseId => match &m.license {
                 Some(license) => Cow::Borrowed(license.id.as_str()),
                 None => Cow::Borrowed(""),
             },
-            Field::LicenseUrl => match &m.license {
+            Self::LicenseUrl => match &m.license {
                 Some(license) => optional(&license.url),
                 None => Cow::Borrowed(""),
             },
-            Field::Authors => join(|author| author.name.as_str()),
-            Field::AuthorUrls => join(|author| author.url.as_str()),
-            Field::AuthorsMd => Cow::Owned(
+            Self::Authors => join(|author| author.name.as_str()),
+            Self::AuthorUrls => join(|author| author.url.as_str()),
+            Self::AuthorsMd => Cow::Owned(
                 m.authors
                     .iter()
                     .map(|author| format!("[{}]({})", author.name, author.url))
                     .collect::<Vec<_>>()
                     .join(", "),
             ),
-            Field::Index => Cow::Owned(position.to_string()),
+            Self::Index => Cow::Owned(position.to_string()),
         }
     }
 }
@@ -286,7 +286,7 @@ impl Formatter {
                 match segment {
                     Segment::Literal(text) => out.write_all(text.as_bytes())?,
                     Segment::Field(field) => {
-                        out.write_all(single_line(field.render(m, index + 1)).as_bytes())?
+                        out.write_all(single_line(field.render(m, index + 1)).as_bytes())?;
                     }
                 }
             }

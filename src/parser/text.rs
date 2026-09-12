@@ -51,7 +51,7 @@ impl TextParser {
         let result = text
             .to_string()
             .lines()
-            .map(|line| line.trim())
+            .map(str::trim)
             .enumerate()
             .filter(|(_, line)| !line.is_empty())
             .filter(|(_, line)| !line.starts_with('#'))
@@ -72,7 +72,7 @@ impl TextParser {
                     curseforge_mods.push(ParsedCurseForgeId {
                         id,
                         cache_id: version_id,
-                    })
+                    });
                 }
             }
         }
