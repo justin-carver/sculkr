@@ -1,6 +1,6 @@
 use std::{any, env, path::PathBuf, process::ExitCode};
 
-///  All Code below relies on new clap:: 4.0+ API! (Didn't pin it... for now...)
+///  All Code below relies on new `clap::` 4.0+ API! (Didn't pin it... for now...)
 ///  Perhaps consider moving this into a more centralized "command" file,
 ///  depending on future usage.
 use clap::{
@@ -44,7 +44,7 @@ const HELP_STYLES: Styles = Styles::styled()
   // DEBUG TESTING
   // arg_required_else_help = true
 )]
-pub(crate) struct Cli {
+pub struct Cli {
     /// Increase logging verbosity (-v, -vv, -vvv)
     #[arg(short, long, action = ArgAction::Count, global = true)]
     pub(crate) verbose: u8,
@@ -126,7 +126,7 @@ impl Cli {
 }
 
 #[derive(Debug, Subcommand)]
-pub(crate) enum Command {
+pub enum Command {
     /// Prints information about this program, including version, authors, and description
     About,
     /// Print the sculkr configuration to stdout
@@ -134,7 +134,7 @@ pub(crate) enum Command {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Verbosity {
+pub enum Verbosity {
     Quiet,
     Normal,
     Info,
@@ -142,22 +142,22 @@ pub(crate) enum Verbosity {
 }
 
 impl Verbosity {
-    pub fn resolve(verbose: u8, quiet: bool) -> Self {
+    pub const fn resolve(verbose: u8, quiet: bool) -> Self {
         match (quiet, verbose) {
-            (true, _) => Verbosity::Quiet,
-            (_, 0) => Verbosity::Normal,
-            (_, 1) => Verbosity::Info,
-            (..) => Verbosity::Debug,
+            (true, _) => Self::Quiet,
+            (_, 0) => Self::Normal,
+            (_, 1) => Self::Info,
+            (..) => Self::Debug,
         }
     }
 
-    /// Converts the verbosity level to a log::LevelFilter for use with the log crate.
-    pub fn to_level_filter(self) -> log::LevelFilter {
+    /// Converts the verbosity level to a `log::LevelFilter` for use with the log crate.
+    pub const fn to_level_filter(self) -> log::LevelFilter {
         match self {
-            Verbosity::Quiet => log::LevelFilter::Error,
-            Verbosity::Normal => log::LevelFilter::Warn,
-            Verbosity::Info => log::LevelFilter::Info,
-            Verbosity::Debug => log::LevelFilter::Trace,
+            Self::Quiet => log::LevelFilter::Error,
+            Self::Normal => log::LevelFilter::Warn,
+            Self::Info => log::LevelFilter::Info,
+            Self::Debug => log::LevelFilter::Trace,
         }
     }
 }
@@ -179,7 +179,7 @@ fn write_fancy_divider(out: &mut dyn std::io::Write, title: &str) -> anyhow::Res
     writeln!(
         out,
         "\n┏━ {} ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈\n",
-        format!("▓▒░ {} ░▒▓", title).black().bold().on_bright_cyan()
+        format!("▓▒░ {title} ░▒▓").black().bold().on_bright_cyan()
     )?;
     Ok(())
 }
@@ -196,6 +196,7 @@ struct Runtime {
     /// Where a global `.sculk` would go, named when there is none to report so
     /// the answer to "where do I put one" is in the output.
     config_home: Option<PathBuf>,
+    #[allow(clippy::doc_markdown)]
     /// Modrinth and CurseForge counts, or `None` when there is no pack to read.
     mods: Option<(usize, usize)>,
     cache: PathBuf,
@@ -208,6 +209,7 @@ struct Runtime {
     verbosity: Verbosity,
 }
 
+#[allow(clippy::arithmetic_side_effects)]
 impl Runtime {
     fn gather(cli: &Cli, loaded: &crate::config::Loaded) -> Self {
         // Reported as the pack root, so it has to be resolved the same way the
@@ -249,7 +251,7 @@ impl Runtime {
 }
 
 /// Outputs the current runtime configuration of the program.
-pub(crate) fn config(
+pub fn config(
     out: &mut dyn std::io::Write,
     cli: &Cli,
     loaded: &crate::config::Loaded,

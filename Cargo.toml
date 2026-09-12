@@ -6,7 +6,6 @@ version = "0.2.4"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
-readme = "README.md"
 keywords = ["packwiz", "modpack", "minecraft", "curseforge", "modlist"]
 categories = ["command-line-utilities"]
 repository = "https://github.com/justin-carver/sculkr"
@@ -15,14 +14,14 @@ build = "build.rs"
 # "./" matches nothing. Everything here is development tooling that a crates.io
 # consumer never runs.
 exclude = [
-    ".github/",
-    ".gitattributes",
-    ".gitignore",
-    ".rustfmt.toml",
-    "cliff.toml",
-    "justfile",
-    "scripts/",
-    "*.png",
+  ".github/",
+  ".gitattributes",
+  ".gitignore",
+  ".rustfmt.toml",
+  "cliff.toml",
+  "justfile",
+  "scripts/",
+  "*.png",
 ]
 
 # Borrowed from the lovely: https://www.namtao.com/rust/
@@ -70,9 +69,9 @@ path = "src/main.rs"
 clap = { version = "4.6", features = ["cargo", "derive", "color"] }
 
 minreq = { version = "3.0", features = [
-    "https-rustls",
-    "json-using-serde",
-    "urlencoding",
+  "https-rustls",
+  "json-using-serde",
+  "urlencoding",
 ] }
 
 serde = { version = "1.0", features = ["derive"] }
