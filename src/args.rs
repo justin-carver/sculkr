@@ -654,7 +654,7 @@ mod tests {
                 config_sources: Vec::new(),
                 config_home: Some(PathBuf::from("/home/user/.config/sculkr/.sculk")),
                 mods: None,
-                cache: PathBuf::from("/home/user/.packwiz-modlist.cache.json"),
+                cache: PathBuf::from("/home/user/.sculkr.cache.json"),
                 cache_entries: None,
                 api_key: None,
                 output: None,

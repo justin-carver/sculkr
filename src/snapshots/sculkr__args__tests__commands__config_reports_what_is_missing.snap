@@ -16,7 +16,7 @@ expression: rendered
 
   Pack root:   /home/user
   Mods:        no *.pw.toml files found here
-  Cache:       /home/user/.packwiz-modlist.cache.json (not written yet)
+  Cache:       /home/user/.sculkr.cache.json (not written yet)
 
 ┏━ ▓▒░ Secrets ░▒▓ ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈
 
