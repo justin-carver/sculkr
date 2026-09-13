@@ -285,3 +285,6 @@ impl Cache {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests;

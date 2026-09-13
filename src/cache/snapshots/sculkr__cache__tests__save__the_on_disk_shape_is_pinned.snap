@@ -1,0 +1,32 @@
+---
+source: src/cache/tests.rs
+expression: pretty
+---
+{
+  "mods": {
+    "AANobbMI": {
+      "authors": [
+        {
+          "name": "someone",
+          "url": "https://modrinth.com/user/someone"
+        }
+      ],
+      "cache_id": "v1",
+      "description": "Sodium does things",
+      "icon_url": "https://cdn.modrinth.com/AANobbMI.webp",
+      "id": "AANobbMI",
+      "issues_url": null,
+      "license": {
+        "id": "MIT",
+        "name": "MIT License",
+        "url": null
+      },
+      "mod_url": "https://modrinth.com/mod/AANobbMI",
+      "slug": "sodium",
+      "source_url": "https://github.com/someone/AANobbMI",
+      "title": "Sodium",
+      "wiki_url": null
+    }
+  },
+  "version": 3
+}
