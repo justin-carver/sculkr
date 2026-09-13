@@ -53,8 +53,6 @@ fn setup_logging(verbosity: args::Verbosity, color: ColorChoice) {
     colored::control::set_virtual_terminal(true).unwrap_or_default();
 }
 
-const CACHE_PATH: &str = ".packwiz-modlist.cache.json";
-
 fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Error> {
     match std::env::current_dir() {
         Ok(cwd) => log::debug!("working directory: \"{}\"", cwd.display()),
@@ -63,7 +61,13 @@ fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Er
 
     log::debug!("pack root: \"{}\"", pack_root.display());
 
-    let cache = Cache::load(CACHE_PATH)?;
+    Cache::preflight(pack_root);
+
+    // TODO: Need to ensure there is really good test covereage for cache file I/O
+    let cache = cli
+        .cache
+        .as_ref()
+        .map_or_else(|| Cache::load(cache::CACHE_PATH), Cache::load);
 
     // Absent is not fatal: only --json needs the metadata, and a bare directory
     // of *.pw.toml files still lists fine.
@@ -85,7 +89,7 @@ fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Er
     });
 
     let app = App::new(
-        cache,
+        cache?,
         pw_parser,
         cf_api_key,
         pack,

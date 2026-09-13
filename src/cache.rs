@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs::OpenOptions,
     io::ErrorKind,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
@@ -11,6 +11,16 @@ use crate::{
     Mod,
     error::{Error, IoContext},
 };
+
+pub const CACHE_PATH: &str = ".sculkr.cache.json";
+
+/// Cache file names from the projects sculkr was forked from.
+const PREVIOUS_CACHE_FILES: [&str; 4] = [
+    ".packwiz-modlist.cache",
+    ".packwiz-modlist.cache.json",
+    ".packwizml.cache",
+    ".packwizml.cache.json",
+];
 
 pub type CacheData = HashMap<String, CacheMod>;
 
@@ -137,6 +147,59 @@ impl Cache {
                 _ => Err(Error::FileIo(resolved, err, "open cache file")),
             },
         }
+    }
+
+    /// Very similar to [`crate::parser::pack`], except that nothing at `path` is
+    /// `None` rather than an empty cache, since [`Self::load`] cannot tell the
+    /// caller which of the two it found.
+    fn try_read<P>(path: P) -> Result<Option<Self>, Error>
+    where
+        P: AsRef<Path>,
+    {
+        let cache_path = crate::util::resolve_for_display(path);
+
+        if !cache_path.is_file() {
+            return Ok(None);
+        }
+
+        Self::load(cache_path).map(Some)
+    }
+
+    /// Every old fork cache file in `dir`, read or failed.
+    fn previous_caches(dir: &Path) -> Vec<Result<Self, Error>> {
+        PREVIOUS_CACHE_FILES
+            .iter()
+            .filter_map(|name| Self::try_read(dir.join(name)).transpose())
+            .collect()
+    }
+
+    /// There may be some conditional checks that need to occur before intializing the cache.
+    pub fn preflight<P>(dir: P)
+    where
+        P: AsRef<Path>,
+    {
+        // Checking for any old fork cache files in the pack_root
+        let found = Self::previous_caches(dir.as_ref());
+
+        if found.is_empty() {
+            return;
+        }
+
+        for result in &found {
+            match result {
+                // TODO: This should probably state this to the user in a better way
+                Ok(cache) => log::warn!(
+                    "older cache file detected: {}",
+                    cache.file.as_path().display()
+                ),
+                Err(e) => log::error!("{}", format_args!("{e:#?}")),
+            }
+        }
+
+        // TODO: Implement `sculkr convert` to migrate older/broken caches to .sculkr.cache.json
+        log::warn!(
+            "if any of these should be converted, please run `sculkr convert <CACHE_PATH>`."
+        );
     }
 
     pub fn set_data(&mut self, data: CacheData) {

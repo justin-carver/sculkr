@@ -4,7 +4,7 @@ use std::{any, env, path::PathBuf, process::ExitCode};
 ///  Perhaps consider moving this into a more centralized "command" file,
 ///  depending on future usage.
 use clap::{
-    ArgAction, Args, ColorChoice, CommandFactory, Parser, Subcommand, ValueEnum,
+    ArgAction, Args, ColorChoice, CommandFactory, Parser, Subcommand, ValueEnum, ValueHint,
     builder::{Styles, styling::AnsiColor},
 };
 use colored::Colorize;
@@ -66,6 +66,10 @@ pub struct Cli {
     #[clap(short, long, global = true)]
     pub(crate) quiet: bool,
 
+    /// Set the default cache file
+    #[clap(long, global = true, value_name = "PATH")]
+    pub(crate) cache: Option<String>,
+
     /// Sets the color mode [default: auto]
     #[clap(short, long = "color-mode", value_enum, global = true)]
     pub(crate) color_mode: Option<ColorChoice>,
@@ -75,6 +79,7 @@ pub struct Cli {
         long,
         global = true,
         value_name = "PATH",
+        value_hint = ValueHint::DirPath,
         help = format!("A path anywhere inside the packwiz pack; the root is found by searching upward for pack.toml. [default: {:?}]", PathBuf::from(".").canonicalize().unwrap_or(PathBuf::from("."))),
     )]
     pub(crate) path: Option<PathBuf>,
@@ -263,7 +268,9 @@ impl Runtime {
             crate::parser::pack::find_root(&start).unwrap_or(start),
         );
 
-        let cache = crate::util::resolve_for_display(crate::CACHE_PATH);
+        // This will assume that the correct cache is assigned `[crate::cache::CACHE_PATH]`
+        // appropriately. This can be modified later to determine or point to an older cache.
+        let cache = crate::util::resolve_for_display(crate::cache::CACHE_PATH);
 
         // An absent cache file and an unreadable one both read as "nothing to
         // report", and `Cache::load` already logs which of the two it was.
@@ -539,6 +546,7 @@ mod tests {
                 "--color_mode", // `clap::` renames haven't occurred
                 "--sort_by",
                 "--reverse",
+                "--cache",
             ]
             .into_iter()
             .map(String::from)
