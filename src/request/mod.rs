@@ -48,12 +48,11 @@ where
 
 /// Renders a true response body for diagnostics
 pub fn describe_body(response: &minreq::Response) -> String {
-    match response.as_str() {
-        Ok(text) => render_body(text),
-        Err(_) => format!("<{} bytes of non-UTF-8 body>", response.as_bytes().len()),
-    }
+    response.as_str().map_or_else(
+        |_| format!("<{} bytes of non-UTF-8 body>", response.as_bytes().len()),
+        render_body,
+    )
 }
-
 /// The pure half of [`describe_body`], split out so it can be tested without
 /// constructing a live [`minreq::Response`], byte-for-byte.
 fn render_body(text: &str) -> String {
@@ -147,6 +146,7 @@ impl From<ParsedCurseForgeId> for CurseForgeId {
     }
 }
 
+#[allow(clippy::struct_field_names)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Mod {

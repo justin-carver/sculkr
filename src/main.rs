@@ -68,7 +68,7 @@ fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Er
         .and_then(|pack| pack.index.as_ref())
         .map(|index| index.file.as_str());
 
-    let pw_parser = PackwizParser::load_from(&pack_root, index_file)?;
+    let pw_parser = PackwizParser::load_from(pack_root, index_file)?;
     let packwiz_mods = pw_parser.mods.clone();
 
     // Resolved here rather than at the request, so the environment-over-file
@@ -87,7 +87,7 @@ fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Er
         packwiz_mods,
     );
 
-    if let Err(err) = app.run(&cli) {
+    if let Err(err) = app.run(cli) {
         log::error!("{err}");
     }
 

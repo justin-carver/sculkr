@@ -47,7 +47,10 @@ impl Secret {
             .get(..KEEP)
             .map_or_else(String::new, |head| head.iter().collect());
 
-        let tail: String = chars[chars.len() - KEEP..].iter().collect();
+        let tail_start = chars.len().saturating_sub(KEEP);
+        let tail: String = chars
+            .get(tail_start..)
+            .map_or_else(String::new, |tail| tail.iter().collect());
 
         format!("{head}...{tail}")
     }

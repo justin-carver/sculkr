@@ -161,7 +161,7 @@ impl App {
         }
 
         if !mr_mods_ids.is_empty() {
-            let fetched = get_modrinth_mods(mr_mods_ids)?;
+            let fetched = get_modrinth_mods(&mr_mods_ids)?;
             let mut returned = HashSet::<String>::with_capacity(fetched.len());
 
             for m in fetched {
@@ -228,7 +228,7 @@ impl App {
     }
 
     pub fn run(&self, cli: &Cli) -> Result<(), Error> {
-        let destination = Destination::resolve(&cli);
+        let destination = Destination::resolve(cli);
 
         if cli.json {
             if cli.format.is_some() {

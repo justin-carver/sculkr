@@ -44,7 +44,7 @@ fn parse_line((n, line): (usize, &str)) -> Result<ParsedLine, ParseError> {
 }
 
 impl TextParser {
-    pub fn new<S>(text: S) -> Result<Self, Error>
+    pub fn new<S>(text: &S) -> Result<Self, Error>
     where
         S: ToString,
     {
