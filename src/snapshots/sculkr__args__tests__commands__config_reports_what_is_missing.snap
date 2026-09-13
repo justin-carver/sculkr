@@ -20,4 +20,4 @@ expression: rendered
 
 ┏━ ▓▒░ Secrets ░▒▓ ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈
 
-  CF_API_KEY:  not set (CurseForge mods will fail)
+  CF_API_KEY:  not set (CurseForge mod lookups will fail)
