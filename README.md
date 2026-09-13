@@ -86,6 +86,8 @@ format = '- [{NAME}]({URL}) - {DESC}\n'  # same as --format
 verbose = 1                             # 0-3, same as -v/-vv/-vvv
 quiet   = false                         # same as --quiet
 json    = false                         # same as --json; overrides format
+sort-by = "name"                        # same as --sort-by; any placeholder but INDEX
+reverse = false                         # same as --reverse; Z-A instead of A-Z
 
 [secrets]                               # read the Secrets section below first
 cf-api-key = '$2a$10$...'               # same as CF_API_KEY
@@ -169,6 +171,10 @@ sculkr -p mods -o modlist.md
 
 # Apply a custom template, one mod per line
 sculkr -p mods -f '{INDEX}. {NAME} ({SLUG}) - {LICENSE_ID}\n'
+
+# Sort by author instead of name (A-Z), or Z-A with --reverse
+sculkr -p mods --sort-by authors
+sculkr -p mods --sort-by authors --reverse
 
 # Debug logging on stderr, modlist still outputs cleanly to file
 sculkr -p mods -vv -o modlist.md

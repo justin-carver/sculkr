@@ -25,12 +25,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use clap::{ColorChoice, ValueEnum};
 use directories::ProjectDirs;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
 
 use crate::{
     env::{CF_API_KEY, Secret},
     error::{Error, IoContext},
+    format::SortKey,
 };
 
 /// **Note:** If a future config file changes the `.sculk` file extension, after
@@ -80,6 +82,10 @@ pub struct Config {
     pub verbose: Option<u8>,
     pub quiet: Option<bool>,
     pub json: Option<bool>,
+    #[serde(default, deserialize_with = "color_choice")]
+    pub color_mode: Option<ColorChoice>,
+    pub sort_by: Option<SortKey>,
+    pub reverse: Option<bool>,
 
     #[serde(default)]
     pub secrets: Secrets,
@@ -88,6 +94,30 @@ pub struct Config {
     /// instead of parsed into silence.
     #[serde(flatten)]
     unknown: BTreeMap<String, toml::Value>,
+}
+
+/// `ColorChoice` from has no serde impls of its own, so it goes through clap's
+/// parser instead, which keeps the file accepting what `--color-mode` does.
+fn color_choice<'de, D>(deserializer: D) -> Result<Option<ColorChoice>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let name = String::deserialize(deserializer)?;
+
+    <ColorChoice as ValueEnum>::from_str(&name, true)
+        .map(Some)
+        .map_err(|_| {
+            let expected = ColorChoice::value_variants()
+                .iter()
+                .filter_map(ValueEnum::to_possible_value)
+                .map(|value| value.get_name().to_owned())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            de::Error::custom(format!(
+                "unknown color mode \"{name}\", expected one of: {expected}"
+            ))
+        })
 }
 
 /// Credentials a `.sculk` may carry.
@@ -162,6 +192,9 @@ impl Config {
             verbose,
             quiet,
             json,
+            color_mode,
+            sort_by,
+            reverse,
             secrets,
             unknown,
         } = other;
@@ -172,6 +205,9 @@ impl Config {
         self.verbose = verbose.or(self.verbose);
         self.quiet = quiet.or(self.quiet);
         self.json = json.or(self.json);
+        self.color_mode = color_mode.or(self.color_mode);
+        self.sort_by = sort_by.or(self.sort_by);
+        self.reverse = reverse.or(self.reverse);
         self.secrets.overlay(secrets);
         self.unknown.extend(unknown);
     }
@@ -389,6 +425,52 @@ mod tests {
         assert_eq!(config.format.as_deref(), Some(r"- {NAME}\n"));
         assert_eq!(config.verbose, Some(2));
         assert_eq!(config.quiet, Some(true));
+    }
+
+    /// Spelled the way `--color-mode` spells it, in any case.
+    #[test]
+    fn a_color_mode_is_read_the_way_clap_reads_it() {
+        assert_eq!(
+            parse("color-mode = \"never\"").color_mode,
+            Some(ColorChoice::Never)
+        );
+        assert_eq!(
+            parse("color-mode = \"Always\"").color_mode,
+            Some(ColorChoice::Always)
+        );
+        assert!(parse("").color_mode.is_none());
+    }
+
+    #[test]
+    fn an_unknown_color_mode_names_the_valid_ones() {
+        let err = toml::from_str::<Config>("color-mode = \"rainbow\"")
+            .map(|_| ())
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("\"rainbow\""), "{err}");
+        assert!(err.contains("auto, always, never"), "{err}");
+    }
+
+    #[test]
+    fn sorting_is_read_from_the_file() {
+        let config = parse("sort-by = \"authors\"\nreverse = true");
+
+        assert_eq!(config.sort_by, "AUTHORS".parse().ok());
+        assert_eq!(config.reverse, Some(true));
+        assert!(config.unknown.is_empty());
+    }
+
+    /// Unlike an unknown key, a known key with a bad value fails the file, the
+    /// same as `color-mode` does, and says what it would have taken.
+    #[test]
+    fn an_unsortable_field_names_the_valid_ones() {
+        let err = toml::from_str::<Config>("sort-by = \"index\"")
+            .map(|_| ())
+            .unwrap_err()
+            .to_string();
+
+        assert!(err.contains("INDEX"), "{err}");
     }
 
     /// A key we do not know is a typo or a newer release's key. Neither is

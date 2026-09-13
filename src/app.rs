@@ -14,7 +14,7 @@ use crate::{
     cache::CacheId,
     config::Config,
     env::Secret,
-    format::Formatter,
+    format::{Formatter, SortKey},
     get_curseforge_mods, get_modrinth_mods,
     parser::{
         ParsedCurseForgeId, ParsedModrinthId, Parser, export, pack::Pack, packwiz::PackwizMod,
@@ -212,17 +212,11 @@ impl App {
         Ok(mods)
     }
 
-    /// Every mod in the pack in alphabetical order by title, then id.
-    pub fn sorted_mods(&self) -> Result<Vec<Mod>, Error> {
+    /// Every mod in the pack, ordered by `key`. See [`SortKey::sort`].
+    pub fn sorted_mods(&self, key: SortKey, reverse: bool) -> Result<Vec<Mod>, Error> {
         let mut mods = self.get_mods()?;
 
-        // Tie-break on id so mods sharing a title still land in a fixed order.
-        mods.sort_by(|a, b| {
-            a.title
-                .to_lowercase()
-                .cmp(&b.title.to_lowercase())
-                .then_with(|| a.id.cmp(&b.id))
-        });
+        key.sort(&mut mods, reverse);
 
         Ok(mods)
     }
@@ -235,13 +229,13 @@ impl App {
                 log::warn!("--format is ignored with --json, which emits a whole document");
             }
 
-            return self.run_export(&destination);
+            return self.run_export(cli, &destination);
         }
 
         // Parsed before anything is fetched, so a typo in the template costs a
         // message instead of a round of API calls.
         let formatter = Formatter::new(cli.format())?;
-        let mods = self.sorted_mods()?;
+        let mods = self.sorted_mods(cli.sort_by(), cli.reverse)?;
 
         let mut out = destination.writer()?;
 
@@ -254,12 +248,12 @@ impl App {
     }
 
     /// The whole pack as one JSON document.
-    fn run_export(&self, destination: &Destination<'_>) -> Result<(), Error> {
+    fn run_export(&self, cli: &Cli, destination: &Destination<'_>) -> Result<(), Error> {
         let pack = self.pack.as_ref().ok_or_else(|| {
             Error::MissingPackToml(crate::parser::pack::PACK_FILE_NAME.to_owned())
         })?;
 
-        let mods = self.sorted_mods()?;
+        let mods = self.sorted_mods(cli.sort_by(), cli.reverse)?;
         let document = export::generate_document(pack, &self.config, &self.packwiz_mods, &mods)?;
 
         let mut out = destination.writer()?;

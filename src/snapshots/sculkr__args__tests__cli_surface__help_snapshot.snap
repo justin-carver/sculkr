@@ -67,6 +67,16 @@ Options:
           
           [default: - [{NAME}]({URL}) - {DESCRIPTION}\n]
 
+  -s, --sort-by <FIELD>
+          Sorts the modlist A-Z by a placeholder's value [default: NAME]
+          
+          Takes any placeholder name from --format except INDEX, e.g. NAME, SLUG or AUTHORS.
+          Numbers compare by value, so "Mod 2" sorts before "Mod 10", and mods
+          with no value for the field are listed last.
+
+  -r, --reverse
+          Reverses the sort, Z-A
+
   -h, --help
           Print help (see a summary with '-h')
 

@@ -10,6 +10,7 @@ expression: rendered
                /home/user/modpack/.sculk
   Output:      modlist.md
   Format:      - [{NAME}]({URL}) - {DESCRIPTION}\n
+  Sort:        AUTHORS (Z-A)
   Log level:   info
 
 ┏━ ▓▒░ Modpack ░▒▓ ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈

@@ -10,6 +10,8 @@ use clap::{
 use colored::Colorize;
 use serde_with::SerializeDisplay;
 
+use crate::format::SortKey;
+
 /// Built from the placeholder table so `--help` can never drift from what the
 /// formatter actually accepts.
 fn format_long_help() -> String {
@@ -26,12 +28,24 @@ fn format_long_help() -> String {
         crate::format::DEFAULT_FORMAT
     )
 }
+
+// Easier to format newlines this way.
+fn sort_by_long_help() -> String {
+    "Sorts the modlist A-Z by a placeholder's value [default: NAME]\n\n\
+    Takes any placeholder name from --format except INDEX, e.g. NAME, SLUG or AUTHORS.\n\
+    Numbers compare by value, so \"Mod 2\" sorts before \"Mod 10\", and mods\n\
+    with no value for the field are listed last."
+        .to_string()
+}
 const HELP_STYLES: Styles = Styles::styled()
     .header(AnsiColor::Yellow.on_default().bold().underline())
     .usage(AnsiColor::Yellow.on_default().bold())
     .literal(AnsiColor::Green.on_default().bold())
     .placeholder(AnsiColor::Cyan.on_default());
 
+// Each bool is an on/off flag the user passes, which is exactly what clap wants
+// a bool for; there is no state machine hiding in them.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser)]
 #[command(
   name = "sculkr",
@@ -93,6 +107,18 @@ pub struct Cli {
   )]
     pub(crate) format: Option<String>,
 
+    /// Sorts the modlist A-Z by a placeholder's value [default: NAME]
+    ///
+    /// Takes any placeholder name from --format except INDEX, e.g. NAME, SLUG or
+    /// AUTHORS. Numbers compare by value, so "Mod 2" sorts before "Mod 10", and
+    /// mods with no value for the field are listed last.
+    #[clap(short, long, global = true, value_name = "FIELD", long_help = sort_by_long_help())]
+    pub(crate) sort_by: Option<SortKey>,
+
+    /// Reverses the sort, Z-A
+    #[clap(short, long, global = true)]
+    pub(crate) reverse: bool,
+
     #[command(subcommand)]
     pub(crate) command: Option<Command>,
 }
@@ -119,12 +145,25 @@ impl Cli {
         if !self.json {
             self.json = config.json.unwrap_or(false);
         }
+
+        // Left as `None` rather than defaulted to `Auto` here, so whoever reads
+        // it can still tell "unset" from an explicit `auto`.
+        self.color_mode = self.color_mode.or(config.color_mode);
+        self.sort_by = self.sort_by.or(config.sort_by);
+
+        if !self.reverse {
+            self.reverse = config.reverse.unwrap_or(false);
+        }
     }
 
     pub(crate) fn format(&self) -> &str {
         self.format
             .as_deref()
             .unwrap_or(crate::format::DEFAULT_FORMAT)
+    }
+
+    pub(crate) fn sort_by(&self) -> SortKey {
+        self.sort_by.unwrap_or_default()
     }
 }
 
@@ -209,6 +248,8 @@ struct Runtime {
     api_key: Option<(String, crate::config::KeySource)>,
     output: Option<PathBuf>,
     format: String,
+    sort_by: SortKey,
+    reverse: bool,
     verbosity: Verbosity,
 }
 
@@ -248,6 +289,8 @@ impl Runtime {
                 .map(|(key, source)| (key.fingerprint(), source)),
             output: cli.output.clone(),
             format: cli.format().to_owned(),
+            sort_by: cli.sort_by(),
+            reverse: cli.reverse,
             verbosity: Verbosity::resolve(cli.verbose, cli.quiet),
         }
     }
@@ -298,6 +341,13 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
             .map_or_else(|| "stdout".to_owned(), |path| path.display().to_string())
     )?;
     writeln!(out, "  {:<12} {}", "Format:".bold(), rt.format)?;
+    writeln!(
+        out,
+        "  {:<12} {} {}",
+        "Sort:".bold(),
+        rt.sort_by,
+        if rt.reverse { "(Z-A)" } else { "(A-Z)" }.dimmed()
+    )?;
     writeln!(
         out,
         "  {:<12} {}",
@@ -359,7 +409,7 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
             "  {:<12} {} {}",
             format!("{}:", crate::env::CF_API_KEY).bold(),
             "not set".yellow(),
-            "(CurseForge mods will fail)".dimmed()
+            "(CurseForge mod lookups will fail)".dimmed()
         )?,
     }
 
@@ -487,6 +537,8 @@ mod tests {
                 "--force",
                 "--json",
                 "--color_mode", // `clap::` renames haven't occurred
+                "--sort_by",
+                "--reverse",
             ]
             .into_iter()
             .map(String::from)
@@ -575,6 +627,8 @@ mod tests {
                 )),
                 output: Some(PathBuf::from("modlist.md")),
                 format: crate::format::DEFAULT_FORMAT.to_owned(),
+                sort_by: "authors".parse().map_err(anyhow::Error::msg)?,
+                reverse: true,
                 verbosity: Verbosity::Info,
             })?;
 
@@ -597,6 +651,8 @@ mod tests {
                 api_key: None,
                 output: None,
                 format: crate::format::DEFAULT_FORMAT.to_owned(),
+                sort_by: SortKey::default(),
+                reverse: false,
                 verbosity: Verbosity::Normal,
             })?;
 
