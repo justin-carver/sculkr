@@ -32,7 +32,8 @@ pub type CacheData = HashMap<String, CacheMod>;
 /// one round of API calls.
 ///
 /// 2: Modrinth authors, which entries written before then left empty.
-const CACHE_VERSION: u32 = 2;
+/// 3: `snake_case` field names throughout, where [`Mod`] was camelCase.
+pub const CACHE_VERSION: u32 = 3;
 
 /// The on-disk shape. Generic over the map so writing can borrow it and
 /// reading can own it, without a second struct or a clone of the whole cache.

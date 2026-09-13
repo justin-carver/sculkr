@@ -52,8 +52,8 @@ pub enum ProjectEntry<'a> {
 
 /// Everything the cache holds for one project, in a fixed key order.
 ///
-/// Borrowed from [`Mod`] rather than reusing it directly, because `Mod` is
-/// camelCase for the cache file and this document is `snake_case`.
+/// Borrowed from [`Mod`] rather than reusing it directly, so that changing the
+/// cache file's shape cannot quietly change this document's.
 #[derive(Serialize, Debug)]
 pub struct ProjectView<'a> {
     pub id: &'a str,

@@ -146,9 +146,10 @@ impl From<ParsedCurseForgeId> for CurseForgeId {
     }
 }
 
+/// Stored as-is in the cache file, so a field change here is a format change
+/// there and needs a [`crate::cache::CACHE_VERSION`] bump.
 #[allow(clippy::struct_field_names)]
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct Mod {
     pub id: String,
     pub slug: String,
@@ -170,14 +171,12 @@ pub struct Mod {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct Author {
     pub name: String,
     pub url: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct License {
     pub id: String,
     pub name: String,
