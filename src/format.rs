@@ -89,10 +89,11 @@ impl Field {
 
     /// Fields the API leaves out render as an empty string rather than as some
     /// stand-in text, so a template stays in control of its own punctuation.
-    fn render<'a>(&self, m: &'a Mod, position: usize) -> Cow<'a, str> {
-        let optional = |value: &'a Option<String>| match value {
-            Some(value) => Cow::Borrowed(value.as_str()),
-            None => Cow::Borrowed(""),
+    fn render<'a>(self, m: &'a Mod, position: usize) -> Cow<'a, str> {
+        let optional = |value: &'a Option<String>| {
+            value.as_ref().map_or(Cow::Borrowed(""), |value: &String| {
+                Cow::Borrowed(value.as_str())
+            })
         };
 
         let join = |f: fn(&crate::request::Author) -> &str| {
@@ -109,18 +110,16 @@ impl Field {
             Self::SourceUrl => optional(&m.source_url),
             Self::IssuesUrl => optional(&m.issues_url),
             Self::WikiUrl => optional(&m.wiki_url),
-            Self::License => match &m.license {
-                Some(license) => Cow::Borrowed(license.name.as_str()),
-                None => Cow::Borrowed(""),
-            },
-            Self::LicenseId => match &m.license {
-                Some(license) => Cow::Borrowed(license.id.as_str()),
-                None => Cow::Borrowed(""),
-            },
-            Self::LicenseUrl => match &m.license {
-                Some(license) => optional(&license.url),
-                None => Cow::Borrowed(""),
-            },
+            Self::License => m.license.as_ref().map_or(Cow::Borrowed(""), |license| {
+                Cow::Borrowed(license.name.as_str())
+            }),
+            Self::LicenseId => m.license.as_ref().map_or(Cow::Borrowed(""), |license| {
+                Cow::Borrowed(license.id.as_str())
+            }),
+            Self::LicenseUrl => m
+                .license
+                .as_ref()
+                .map_or(Cow::Borrowed(""), |license| optional(&license.url)),
             Self::Authors => join(|author| author.name.as_str()),
             Self::AuthorUrls => join(|author| author.url.as_str()),
             Self::AuthorsMd => Cow::Owned(
@@ -157,6 +156,7 @@ fn single_line(value: Cow<'_, str>) -> Cow<'_, str> {
 ///
 /// Makes it easy to add a new placeholder: add a row to `FIELDS` and it is automatically
 /// documented and tested.
+#[allow(clippy::arithmetic_side_effects)]
 pub fn placeholder_help() -> String {
     let width = FIELDS
         .iter()
@@ -286,7 +286,9 @@ impl Formatter {
                 match segment {
                     Segment::Literal(text) => out.write_all(text.as_bytes())?,
                     Segment::Field(field) => {
-                        out.write_all(single_line(field.render(m, index + 1)).as_bytes())?;
+                        out.write_all(
+                            single_line(field.render(m, index.saturating_add(1))).as_bytes(),
+                        )?;
                     }
                 }
             }
@@ -432,7 +434,7 @@ mod tests {
             .write_all(&mut out, &[])
             .unwrap();
 
-        assert!(out.is_empty());
+        assert_eq!(out, <[u8; 0]>::default());
     }
 
     #[test]

@@ -130,6 +130,7 @@ impl App {
         }
     }
 
+    #[allow(clippy::arithmetic_side_effects)]
     fn get_mods(&self) -> Result<Vec<Mod>, Error> {
         let mut cache = self.cache.borrow_mut();
         let mut mods =
@@ -185,7 +186,7 @@ impl App {
         }
 
         if !cf_mods_ids.is_empty() {
-            let fetched = get_curseforge_mods(cf_mods_ids, self.cf_api_key.as_ref())?;
+            let fetched = get_curseforge_mods(&cf_mods_ids, self.cf_api_key.as_ref())?;
             let mut returned = HashSet::<String>::with_capacity(fetched.len());
 
             for m in fetched.into_iter().map(Mod::from) {
@@ -226,7 +227,7 @@ impl App {
         Ok(mods)
     }
 
-    pub fn run(&self, cli: Cli) -> Result<(), Error> {
+    pub fn run(&self, cli: &Cli) -> Result<(), Error> {
         let destination = Destination::resolve(&cli);
 
         if cli.json {
