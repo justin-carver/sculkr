@@ -1,10 +1,14 @@
 # sculkr
 test/
-.packwiz-modlist.cache.json
 .sculkr.cache.json
 .env
 .env.bak
 
+# Older cache file names
+.packwiz-modlist.*
+.packwizml.*
+
+# Rust-related
 .cargo/
 .vscode/
 
