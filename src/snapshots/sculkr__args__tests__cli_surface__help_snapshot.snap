@@ -18,6 +18,11 @@ Options:
   -q, --quiet
           Suppress all non-error output
 
+  -c, --color-mode <COLOR_MODE>
+          Sets the color mode [default: auto]
+          
+          [possible values: auto, always, never]
+
   -p, --path <PATH>
           A path anywhere inside the packwiz pack; the root is found by searching upward for pack.toml. [default: "[CWD]"]
 

@@ -8,6 +8,7 @@ use clap::{
     builder::{Styles, styling::AnsiColor},
 };
 use colored::Colorize;
+use serde_with::SerializeDisplay;
 
 /// Built from the placeholder table so `--help` can never drift from what the
 /// formatter actually accepts.
@@ -25,7 +26,6 @@ fn format_long_help() -> String {
         crate::format::DEFAULT_FORMAT
     )
 }
-
 const HELP_STYLES: Styles = Styles::styled()
     .header(AnsiColor::Yellow.on_default().bold().underline())
     .usage(AnsiColor::Yellow.on_default().bold())
@@ -35,7 +35,6 @@ const HELP_STYLES: Styles = Styles::styled()
 #[derive(Debug, Parser)]
 #[command(
   name = "sculkr",
-  color = ColorChoice::Auto,
   styles = HELP_STYLES,
   version,
   about = "Companion CLI for packwiz - generate modlists and track Minecraft modpack changes",
@@ -46,12 +45,16 @@ const HELP_STYLES: Styles = Styles::styled()
 )]
 pub struct Cli {
     /// Increase logging verbosity (-v, -vv, -vvv)
-    #[arg(short, long, action = ArgAction::Count, global = true)]
+    #[clap(short, long, action = ArgAction::Count, global = true)]
     pub(crate) verbose: u8,
 
     /// Suppress all non-error output
-    #[arg(short, long, global = true)]
+    #[clap(short, long, global = true)]
     pub(crate) quiet: bool,
+
+    /// Sets the color mode [default: auto]
+    #[clap(short, long = "color-mode", value_enum, global = true)]
+    pub(crate) color_mode: Option<ColorChoice>,
 
     #[clap(
         short,
@@ -483,6 +486,7 @@ mod tests {
                 "--format",
                 "--force",
                 "--json",
+                "--color_mode", // `clap::` renames haven't occurred
             ]
             .into_iter()
             .map(String::from)

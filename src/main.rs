@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{ColorChoice, CommandFactory, FromArgMatches, Parser, builder::Styles};
 
 use crate::{
     app::App,
@@ -26,7 +26,7 @@ mod parser;
 mod request;
 mod util;
 
-fn setup_logging(verbosity: args::Verbosity) {
+fn setup_logging(verbosity: args::Verbosity, color: ColorChoice) {
     let level = verbosity.to_level_filter();
 
     simple_logger::SimpleLogger::new()
@@ -40,7 +40,13 @@ fn setup_logging(verbosity: args::Verbosity) {
         .init()
         .unwrap_or_default();
 
-    colored::control::set_override(true);
+    match color {
+        ColorChoice::Always => colored::control::set_override(true),
+        ColorChoice::Never => colored::control::set_override(false),
+        ColorChoice::Auto => colored::control::unset_override(), // TTY + NO_COLOR/CLICOLOR
+    }
+
+    // colored::control::set_override(true);
 
     // TODO: I'm actually unsure if this works the way it should on Windows...
     #[cfg(windows)]
@@ -115,8 +121,12 @@ fn main() {
 
     // Flags
     let verbosity = args::Verbosity::resolve(cli.verbose, cli.quiet);
+    let color_mode = cli.color_mode.unwrap_or_default();
+    let matches = Cli::command().color(color_mode).get_matches();
+    let mut cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+
     // Logging needs to be run after verbosity is resolved, but before any other code that may log.
-    setup_logging(verbosity);
+    setup_logging(verbosity, color_mode);
 
     for source in &loaded.sources {
         log::debug!("loaded config from \"{}\"", source.display());
