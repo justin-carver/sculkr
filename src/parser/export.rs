@@ -29,7 +29,9 @@ use crate::{
 };
 
 /// Bump when a field is removed or changes meaning, so consumers can branch.
-pub const SCHEMA_VERSION: u32 = 1;
+///
+/// 2: `pack.pack-format` renamed to `pack.pack_format`, matching every other key.
+pub const SCHEMA_VERSION: u32 = 2;
 
 #[derive(Serialize, Debug)]
 pub struct Document<'a> {
@@ -260,10 +262,11 @@ neoforge = "21.1.249"
             "AANobbMI", "sodium", "Sodium",
         )]);
 
-        assert_eq!(doc["schema_version"], 1);
+        assert_eq!(doc["schema_version"], 2);
 
         assert_eq!(doc["pack"]["name"], "Create Prime");
-        assert_eq!(doc["pack"]["pack-format"], "packwiz:1.1.0");
+        assert_eq!(doc["pack"]["pack_format"], "packwiz:1.1.0");
+        assert!(doc["pack"].get("pack-format").is_none());
         assert_eq!(doc["pack"]["versions"]["minecraft"], "1.21.1");
         assert_eq!(doc["pack"]["versions"]["neoforge"], "21.1.249");
 

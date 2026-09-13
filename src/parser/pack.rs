@@ -21,7 +21,7 @@ pub struct Pack {
     pub author: Option<String>,
     pub version: Option<String>,
     /// e.g. `packwiz:1.1.0`.
-    #[serde(rename(deserialize = "pack-format", serialize = "pack-format"))]
+    #[serde(rename(deserialize = "pack-format", serialize = "pack_format"))]
     pub format: Option<String>,
     #[serde(default)]
     pub versions: PackVersions,
