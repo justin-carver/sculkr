@@ -4,9 +4,16 @@
 //! field the cache holds. It is parsed once up front so a typo fails before
 //! any network calls, and so rendering a few hundred mods is just appends.
 
-use std::{borrow::Cow, io::Write};
+use std::{
+    borrow::Cow,
+    cmp::Ordering,
+    fmt,
+    io::Write,
+    iter::Peekable,
+    str::{Chars, FromStr},
+};
 
-use serde_with::formats::Format;
+use serde_with::{DeserializeFromStr, formats::Format};
 
 use crate::request::Mod;
 
@@ -16,10 +23,11 @@ use crate::request::Mod;
 /// characters at this point -- which is what keeps `--help` readable.
 pub const DEFAULT_FORMAT: &str = r"- [{NAME}]({URL}) - {DESCRIPTION}\n";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum Field {
     Id,
     Slug,
+    #[default]
     Name,
     Description,
     Url,
@@ -87,6 +95,14 @@ impl Field {
             .map(|(_, field, _)| *field)
     }
 
+    /// The canonical placeholder name, the first row naming this field.
+    fn name(self) -> &'static str {
+        FIELDS
+            .iter()
+            .find(|(_, field, _)| *field == self)
+            .map_or("", |(name, ..)| *name)
+    }
+
     /// Fields the API leaves out render as an empty string rather than as some
     /// stand-in text, so a template stays in control of its own punctuation.
     fn render<'a>(self, m: &'a Mod, position: usize) -> Cow<'a, str> {
@@ -132,6 +148,131 @@ impl Field {
             Self::Index => Cow::Owned(position.to_string()),
         }
     }
+}
+
+/// The field a modlist is ordered by: any placeholder but `{INDEX}`.
+///
+/// Spelled the way the placeholder is, aliases and case included, so
+/// `--sort-by title` and `{NAME}` name the same field.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, DeserializeFromStr)]
+pub struct SortKey(Field);
+
+impl FromStr for SortKey {
+    type Err = String;
+
+    fn from_str(name: &str) -> Result<Self, Self::Err> {
+        match Field::parse(name) {
+            // An index is a mod's place in the sorted list, so it cannot also
+            // be what decides that place.
+            Some(Field::Index) => {
+                Err("INDEX is a mod's position after sorting, so it cannot be sorted by".to_owned())
+            }
+            Some(field) => Ok(Self(field)),
+            None => {
+                let expected = FIELDS
+                    .iter()
+                    .filter(|(_, field, _)| *field != Field::Index)
+                    .map(|(name, ..)| *name)
+                    .collect::<Vec<_>>()
+                    .join(", ");
+
+                Err(format!(
+                    "unknown sort field \"{name}\", expected one of: {expected}"
+                ))
+            }
+        }
+    }
+}
+
+impl fmt::Display for SortKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.0.name())
+    }
+}
+
+impl SortKey {
+    /// Orders `mods` A-Z by this field, or Z-A when `reverse` is set.
+    ///
+    /// Mods with no value for the field go last in both directions, since a
+    /// block of blanks at the top of the list is not an order anyone wants.
+    /// Ties fall back to the id, so the output never depends on the order the
+    /// APIs happened to answer in.
+    pub fn sort(self, mods: &mut Vec<Mod>, reverse: bool) {
+        // Rendered once per mod rather than once per comparison, since the
+        // author fields allocate.
+        let mut keyed: Vec<(String, Mod)> = mods
+            .drain(..)
+            .map(|m| (self.0.render(&m, 0).into_owned(), m))
+            .collect();
+
+        keyed.sort_by(|(a_key, a), (b_key, b)| {
+            let by_field = match (a_key.is_empty(), b_key.is_empty()) {
+                (false, false) => {
+                    let ordering = natural_cmp(a_key, b_key);
+                    if reverse {
+                        ordering.reverse()
+                    } else {
+                        ordering
+                    }
+                }
+                // `false < true`, so the blank one sorts after.
+                (a_blank, b_blank) => a_blank.cmp(&b_blank),
+            };
+
+            by_field.then_with(|| a.id.cmp(&b.id))
+        });
+
+        mods.extend(keyed.into_iter().map(|(_, m)| m));
+    }
+}
+
+/// Compares the way a person reads a list: case aside, and with runs of digits
+/// compared by value, so "Mod 2" comes before "Mod 10".
+///
+/// Strings that only differ in case or leading zeros still get a fixed order,
+/// from a plain comparison as the last word.
+fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let mut left = a.chars().peekable();
+    let mut right = b.chars().peekable();
+
+    loop {
+        let ordering = match (left.peek().copied(), right.peek().copied()) {
+            (None, None) => return a.cmp(b),
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(l), Some(r)) if l.is_ascii_digit() && r.is_ascii_digit() => {
+                cmp_numbers(&take_digits(&mut left), &take_digits(&mut right))
+            }
+            (Some(l), Some(r)) => {
+                left.next();
+                right.next();
+                l.to_lowercase().cmp(r.to_lowercase())
+            }
+        };
+
+        if ordering.is_ne() {
+            return ordering;
+        }
+    }
+}
+
+fn take_digits(chars: &mut Peekable<Chars<'_>>) -> String {
+    let mut digits = String::new();
+
+    while let Some(c) = chars.next_if(char::is_ascii_digit) {
+        digits.push(c);
+    }
+
+    digits
+}
+
+/// Compares two digit runs by value without parsing them, so a `CurseForge` id
+/// or a long version string cannot overflow anything.
+fn cmp_numbers(a: &str, b: &str) -> Ordering {
+    let a = a.trim_start_matches('0');
+    let b = b.trim_start_matches('0');
+
+    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
 }
 
 /// Flattens line breaks in a substituted value.
@@ -463,6 +604,96 @@ mod tests {
     fn every_documented_placeholder_parses() {
         for (name, field, _) in FIELDS {
             assert_eq!(Field::parse(name), Some(*field), "{name} did not parse");
+        }
+    }
+
+    mod sorting {
+        use super::*;
+
+        fn named(id: &str, title: &str) -> Mod {
+            Mod {
+                id: id.into(),
+                title: title.into(),
+                ..test_mod()
+            }
+        }
+
+        fn sorted(mut mods: Vec<Mod>, key: &str, reverse: bool) -> Vec<String> {
+            key.parse::<SortKey>().unwrap().sort(&mut mods, reverse);
+            mods.into_iter()
+                .map(|m| format!("{}:{}", m.id, m.title))
+                .collect()
+        }
+
+        #[test]
+        fn numbers_compare_by_value_and_case_is_ignored() {
+            assert_eq!(natural_cmp("Mod 2", "Mod 10"), Ordering::Less);
+            assert_eq!(natural_cmp("apple", "Banana"), Ordering::Less);
+            assert_eq!(natural_cmp("Create", "create: steam"), Ordering::Less);
+            assert_eq!(natural_cmp("1.20.1", "1.9"), Ordering::Greater);
+            // Equal by value, but still not a tie.
+            assert_ne!(natural_cmp("007", "7"), Ordering::Equal);
+        }
+
+        #[test]
+        fn the_default_is_name_a_to_z() {
+            let mods = vec![
+                named("1", "Sodium"),
+                named("2", "iris"),
+                named("3", "Mod 10"),
+                named("4", "Mod 2"),
+            ];
+
+            assert_eq!(sorted(mods, &SortKey::default().to_string(), false), [
+                "2:iris", "4:Mod 2", "3:Mod 10", "1:Sodium"
+            ]);
+        }
+
+        #[test]
+        fn reverse_is_z_to_a_but_keeps_ties_in_id_order() {
+            let mods = vec![named("b", "Same"), named("c", "Other"), named("a", "Same")];
+
+            assert_eq!(sorted(mods, "name", true), ["a:Same", "b:Same", "c:Other"]);
+        }
+
+        /// A field most mods leave blank would otherwise open the list with a
+        /// wall of entries that have nothing to be sorted by.
+        #[test]
+        fn blanks_go_last_in_both_directions() {
+            let with_source = |id: &str, source: Option<&str>| Mod {
+                source_url: source.map(Into::into),
+                ..named(id, id)
+            };
+            let mods = || {
+                vec![
+                    with_source("1", None),
+                    with_source("2", Some("https://b.example")),
+                    with_source("3", Some("https://a.example")),
+                ]
+            };
+
+            assert_eq!(sorted(mods(), "SOURCE_URL", false), ["3:3", "2:2", "1:1"]);
+            assert_eq!(sorted(mods(), "SOURCE_URL", true), ["2:2", "3:3", "1:1"]);
+        }
+
+        #[test]
+        fn sort_fields_are_spelled_like_placeholders() {
+            assert_eq!("title".parse::<SortKey>(), "NAME".parse::<SortKey>());
+            assert_eq!(
+                "desc".parse::<SortKey>().unwrap().to_string(),
+                "DESCRIPTION"
+            );
+        }
+
+        #[test]
+        fn index_and_unknown_fields_are_rejected() {
+            let index = "index".parse::<SortKey>().unwrap_err();
+            let unknown = "nmae".parse::<SortKey>().unwrap_err();
+
+            assert!(index.contains("INDEX"), "{index}");
+            assert!(unknown.contains("\"nmae\""), "{unknown}");
+            assert!(unknown.contains("NAME, TITLE"), "{unknown}");
+            assert!(!unknown.contains("INDEX"), "{unknown}");
         }
     }
 }

@@ -9,6 +9,7 @@ expression: rendered
   Config:      no .sculk file found (create one at /home/user/.config/sculkr/.sculk)
   Output:      stdout
   Format:      - [{NAME}]({URL}) - {DESCRIPTION}\n
+  Sort:        NAME (A-Z)
   Log level:   warn
 
 ┏━ ▓▒░ Modpack ░▒▓ ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈
@@ -19,4 +20,4 @@ expression: rendered
 
 ┏━ ▓▒░ Secrets ░▒▓ ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈
 
-  CF_API_KEY:  not set (CurseForge mods will fail)
+  CF_API_KEY:  not set (CurseForge mod lookups will fail)
