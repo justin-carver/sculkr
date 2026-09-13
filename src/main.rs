@@ -24,6 +24,13 @@ mod error;
 mod format;
 mod parser;
 mod request;
+/// Test suites live under `src/tests/`, one file per module. The module under
+/// test declares its own (`#[path = "tests/<module>.rs"] mod tests;`) so the
+/// suite keeps access to private items; only shared fixtures are declared here.
+#[cfg(test)]
+mod tests {
+    pub mod support;
+}
 mod util;
 
 fn setup_logging(verbosity: args::Verbosity, color: ColorChoice) {

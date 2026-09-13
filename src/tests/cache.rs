@@ -2,8 +2,7 @@
 //!
 //! Grouped by what the cache is asked to do: find an entry, prune what left the
 //! pack, read a file, and write one. Anything that touches disk works in its
-//! own [`TempDir`], so tests stay independent whether they run as threads under
-//! `cargo test` or as processes under nextest.
+//! own [`TempDir`].
 
 use std::{
     fs,
@@ -11,79 +10,7 @@ use std::{
 };
 
 use super::*;
-use crate::{
-    parser::{ParsedCurseForgeId, ParsedModrinthId},
-    request::{Author, License},
-};
-
-/// A scratch directory for one test, removed again when it drops.
-struct TempDir(PathBuf);
-
-impl TempDir {
-    /// `name` only has to be unique among these tests; the process id keeps two
-    /// concurrent runs of the suite apart.
-    fn new(name: &str) -> Self {
-        let dir = std::env::temp_dir().join(format!("sculkr-cache-{}-{name}", std::process::id()));
-
-        // A previous run that panicked before dropping may have left one behind.
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("create scratch directory");
-
-        Self(dir)
-    }
-
-    fn cache_file(&self) -> PathBuf {
-        self.join("cache.json")
-    }
-
-    fn join(&self, name: &str) -> PathBuf {
-        self.0.join(name)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        // Best effort: a stray directory under the temp dir is not worth a failure.
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-fn sample_mod(id: &str, title: &str) -> Mod {
-    Mod {
-        id: id.into(),
-        slug: title.to_lowercase(),
-        title: title.into(),
-        description: format!("{title} does things"),
-        mod_url: format!("https://modrinth.com/mod/{id}"),
-        license: Some(License {
-            id: "MIT".into(),
-            name: "MIT License".into(),
-            url: None,
-        }),
-        authors: vec![Author {
-            name: "someone".into(),
-            url: "https://modrinth.com/user/someone".into(),
-        }],
-        icon_url: Some(format!("https://cdn.modrinth.com/{id}.webp")),
-        source_url: Some(format!("https://github.com/someone/{id}")),
-        issues_url: None,
-        wiki_url: None,
-    }
-}
-
-fn modrinth(id: &str, version: &str) -> ParsedModrinthId {
-    ParsedModrinthId {
-        cache_id: version.into(),
-        id: id.into(),
-    }
-}
-
-fn curseforge(id: i32, file_id: &str) -> ParsedCurseForgeId {
-    ParsedCurseForgeId {
-        cache_id: file_id.into(),
-        id,
-    }
-}
+use crate::tests::support::{TempDir, curseforge, modrinth, sample_mod};
 
 /// A clean, empty cache pointed at `file`.
 fn empty_at(file: PathBuf) -> Cache {
@@ -265,7 +192,7 @@ mod load {
 
     #[test]
     fn an_absent_file_is_empty_and_clean() {
-        let dir = TempDir::new("load-absent");
+        let dir = TempDir::new("cache-load-absent");
 
         let cache = Cache::load(dir.cache_file()).expect("an absent file is not an error");
 
@@ -275,7 +202,7 @@ mod load {
 
     #[test]
     fn a_current_file_is_loaded_and_clean() {
-        let dir = TempDir::new("load-current");
+        let dir = TempDir::new("cache-load-current");
         let written = populated();
         write_cache(&dir.cache_file(), CACHE_VERSION, &written.data);
 
@@ -287,7 +214,7 @@ mod load {
 
     #[test]
     fn an_older_version_is_discarded_and_marked_dirty() {
-        let dir = TempDir::new("load-older-version");
+        let dir = TempDir::new("cache-load-older-version");
         let older = CACHE_VERSION
             .checked_sub(1)
             .expect("a version before this one");
@@ -301,7 +228,7 @@ mod load {
 
     #[test]
     fn unparseable_json_is_discarded_and_marked_dirty() {
-        let dir = TempDir::new("load-unparseable");
+        let dir = TempDir::new("cache-load-unparseable");
         fs::write(dir.cache_file(), "{ not json").expect("write fixture");
 
         let cache = Cache::load(dir.cache_file()).expect("a corrupt file is not an error");
@@ -314,7 +241,7 @@ mod load {
     /// not yet added a field [`Mod`] now requires.
     #[test]
     fn an_entry_missing_a_field_is_discarded_and_marked_dirty() {
-        let dir = TempDir::new("load-missing-field");
+        let dir = TempDir::new("cache-load-missing-field");
         let file = format!(
             r#"{{"version":{CACHE_VERSION},"mods":{{"AANobbMI":{{"cache_id":"v1","id":"AANobbMI"}}}}}}"#
         );
@@ -331,8 +258,8 @@ mod load {
     #[cfg(unix)]
     #[test]
     fn a_path_that_cannot_be_opened_is_an_error() {
-        let dir = TempDir::new("load-unopenable");
-        let not_a_dir = dir.0.join("file");
+        let dir = TempDir::new("cache-load-unopenable");
+        let not_a_dir = dir.path().join("file");
         fs::write(&not_a_dir, "").expect("write fixture");
 
         let result = Cache::load(not_a_dir.join("cache.json"));
@@ -347,7 +274,7 @@ mod save {
 
     #[test]
     fn a_clean_cache_leaves_an_existing_file_untouched() {
-        let dir = TempDir::new("save-clean-existing");
+        let dir = TempDir::new("cache-save-clean-existing");
         write_cache(&dir.cache_file(), CACHE_VERSION, &populated().data);
         let cache = Cache::load(dir.cache_file()).expect("load a current file");
 
@@ -363,7 +290,7 @@ mod save {
 
     #[test]
     fn a_clean_cache_does_not_create_a_file() {
-        let dir = TempDir::new("save-clean-absent");
+        let dir = TempDir::new("cache-save-clean-absent");
         let cache = Cache::load(dir.cache_file()).expect("an absent file is not an error");
 
         cache.save().expect("save a clean cache");
@@ -373,7 +300,7 @@ mod save {
 
     #[test]
     fn a_dirty_cache_round_trips_through_load() {
-        let dir = TempDir::new("save-round-trip");
+        let dir = TempDir::new("cache-save-round-trip");
         let mut cache = populated_at(dir.cache_file());
         cache.is_dirty = true;
 
@@ -389,7 +316,7 @@ mod save {
     /// The reason [`Cache::load`] marks a rejected file dirty.
     #[test]
     fn a_rejected_file_is_replaced_even_with_nothing_to_add() {
-        let dir = TempDir::new("save-replaces-rejected");
+        let dir = TempDir::new("cache-save-replaces-rejected");
         fs::write(dir.cache_file(), "{ not json").expect("write fixture");
 
         Cache::load(dir.cache_file())
@@ -404,7 +331,7 @@ mod save {
 
     #[test]
     fn a_prune_is_persisted() {
-        let dir = TempDir::new("save-prune");
+        let dir = TempDir::new("cache-save-prune");
         write_cache(&dir.cache_file(), CACHE_VERSION, &populated().data);
         let mut cache = Cache::load(dir.cache_file()).expect("load a current file");
 
@@ -419,7 +346,7 @@ mod save {
     /// bumping [`CACHE_VERSION`] in the same change.
     #[test]
     fn the_on_disk_shape_is_pinned() {
-        let dir = TempDir::new("save-shape");
+        let dir = TempDir::new("cache-save-shape");
         let mut cache = empty_at(dir.cache_file());
         cache.set_mod(modrinth("AANobbMI", "v1"), sample_mod("AANobbMI", "Sodium"));
 
@@ -452,7 +379,7 @@ mod preflight {
 
     #[test]
     fn nothing_at_the_path_is_none() {
-        let dir = TempDir::new("try-read-absent");
+        let dir = TempDir::new("cache-try-read-absent");
 
         let read = Cache::try_read(dir.cache_file()).expect("an absent file is not an error");
 
@@ -462,7 +389,7 @@ mod preflight {
     /// A directory with a cache file's name is not a cache file.
     #[test]
     fn a_directory_at_the_path_is_none() {
-        let dir = TempDir::new("try-read-directory");
+        let dir = TempDir::new("cache-try-read-directory");
         fs::create_dir(dir.cache_file()).expect("create fixture directory");
 
         let read = Cache::try_read(dir.cache_file()).expect("a directory is not an error");
@@ -472,7 +399,7 @@ mod preflight {
 
     #[test]
     fn a_current_file_is_read() {
-        let dir = TempDir::new("try-read-current");
+        let dir = TempDir::new("cache-try-read-current");
         write_cache(&dir.cache_file(), CACHE_VERSION, &populated().data);
 
         let cache = Cache::try_read(dir.cache_file())
@@ -487,7 +414,7 @@ mod preflight {
     /// as found.
     #[test]
     fn a_file_in_another_format_is_still_found() {
-        let dir = TempDir::new("try-read-foreign");
+        let dir = TempDir::new("cache-try-read-foreign");
         fs::write(dir.cache_file(), r#"{"AANobbMI":{"cacheId":"v1"}}"#).expect("write fixture");
 
         let cache = Cache::try_read(dir.cache_file())
@@ -500,9 +427,14 @@ mod preflight {
 
     #[test]
     fn the_path_is_normalized_for_reporting() {
-        let dir = TempDir::new("try-read-normalized");
+        let dir = TempDir::new("cache-try-read-normalized");
         write_cache(&dir.cache_file(), CACHE_VERSION, &CacheData::new());
-        let roundabout = dir.0.join(".").join("sub").join("..").join("cache.json");
+        let roundabout = dir
+            .path()
+            .join(".")
+            .join("sub")
+            .join("..")
+            .join("cache.json");
         fs::create_dir(dir.join("sub")).expect("create fixture directory");
 
         let cache = Cache::try_read(roundabout)
@@ -516,19 +448,19 @@ mod preflight {
     /// none.
     #[test]
     fn a_directory_without_old_caches_finds_nothing() {
-        let dir = TempDir::new("previous-none");
+        let dir = TempDir::new("cache-previous-none");
 
-        assert!(Cache::previous_caches(&dir.0).is_empty());
+        assert!(Cache::previous_caches(dir.path()).is_empty());
     }
 
     #[test]
     fn every_old_cache_name_is_found() {
-        let dir = TempDir::new("previous-all");
+        let dir = TempDir::new("cache-previous-all");
         for name in PREVIOUS_CACHE_FILES {
             fs::write(dir.join(name), "{}").expect("write fixture");
         }
 
-        let found = Cache::previous_caches(&dir.0);
+        let found = Cache::previous_caches(dir.path());
 
         let mut expected: Vec<PathBuf> = PREVIOUS_CACHE_FILES
             .iter()
@@ -540,19 +472,19 @@ mod preflight {
 
     #[test]
     fn only_the_old_caches_present_are_found() {
-        let dir = TempDir::new("previous-some");
+        let dir = TempDir::new("cache-previous-some");
         fs::write(dir.join(".packwizml.cache.json"), "{}").expect("write fixture");
 
-        let found = Cache::previous_caches(&dir.0);
+        let found = Cache::previous_caches(dir.path());
 
         assert_eq!(files(&found), [dir.join(".packwizml.cache.json")]);
     }
 
     #[test]
     fn the_current_cache_is_not_an_old_one() {
-        let dir = TempDir::new("previous-current");
+        let dir = TempDir::new("cache-previous-current");
         write_cache(&dir.join(CACHE_PATH), CACHE_VERSION, &populated().data);
 
-        assert!(Cache::previous_caches(&dir.0).is_empty());
+        assert!(Cache::previous_caches(dir.path()).is_empty());
     }
 }

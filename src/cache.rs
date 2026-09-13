@@ -287,4 +287,5 @@ impl Cache {
 }
 
 #[cfg(test)]
+#[path = "tests/cache.rs"]
 mod tests;

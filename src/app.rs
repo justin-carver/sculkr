@@ -286,3 +286,7 @@ impl App {
         cache.save()
     }
 }
+
+#[cfg(test)]
+#[path = "tests/app.rs"]
+mod tests;
