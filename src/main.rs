@@ -38,17 +38,18 @@ fn setup_logging(verbosity: args::Verbosity) {
         .without_timestamps()
         .env()
         .init()
-        .unwrap();
+        .unwrap_or_default();
 
     colored::control::set_override(true);
 
+    // TODO: I'm actually unsure if this works the way it should on Windows...
     #[cfg(windows)]
-    colored::control::set_virtual_terminal(true).unwrap();
+    colored::control::set_virtual_terminal(true).unwrap_or_default();
 }
 
 const CACHE_PATH: &str = ".packwiz-modlist.cache.json";
 
-fn run(cli: Cli, loaded: &config::Loaded, pack_root: PathBuf) -> Result<(), Error> {
+fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Error> {
     match std::env::current_dir() {
         Ok(cwd) => log::debug!("working directory: \"{}\"", cwd.display()),
         Err(err) => log::debug!("could not determine working directory: {err}"),
@@ -67,7 +68,7 @@ fn run(cli: Cli, loaded: &config::Loaded, pack_root: PathBuf) -> Result<(), Erro
         .and_then(|pack| pack.index.as_ref())
         .map(|index| index.file.as_str());
 
-    let pw_parser = PackwizParser::load_from(&pack_root, index_file)?;
+    let pw_parser = PackwizParser::load_from(pack_root, index_file)?;
     let packwiz_mods = pw_parser.mods.clone();
 
     // Resolved here rather than at the request, so the environment-over-file
@@ -132,7 +133,7 @@ fn main() {
     let result: anyhow::Result<()> = match cli.command {
         Some(Command::Config) => args::config(&mut std::io::stdout().lock(), &cli, &loaded),
         Some(Command::About) => args::about(&mut std::io::stdout().lock()),
-        None => run(cli, &loaded, pack_root).map_err(anyhow::Error::from),
+        None => run(&cli, &loaded, &pack_root).map_err(anyhow::Error::from),
     };
 
     if let Err(err) = result {

@@ -97,7 +97,7 @@ pub struct Config {
 #[derive(Debug, Default, Clone, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct Secrets {
-    /// A CurseForge API key, the same value as `CF_API_KEY`.
+    /// A `CurseForge` API key, the same value as `CF_API_KEY`.
     pub cf_api_key: Option<Secret>,
 
     #[serde(flatten)]
@@ -111,7 +111,7 @@ impl Secrets {
             unknown,
         } = other;
 
-        self.cf_api_key = cf_api_key.or(self.cf_api_key.take());
+        self.cf_api_key = cf_api_key.or_else(|| self.cf_api_key.take());
         self.unknown.extend(unknown);
     }
 
@@ -139,7 +139,7 @@ impl Config {
         let mut config: Self = toml::from_str(&text)
             .map_err(|err| Error::TomlFile(crate::util::resolve_for_display(file), err))?;
 
-        config.rebase(file.parent().unwrap_or(Path::new(".")));
+        config.rebase(file.parent().unwrap_or_else(|| Path::new(".")));
 
         Ok(Some(config))
     }
@@ -166,9 +166,9 @@ impl Config {
             unknown,
         } = other;
 
-        self.path = path.or(self.path.take());
-        self.output = output.or(self.output.take());
-        self.format = format.or(self.format.take());
+        self.path = path.or_else(|| self.path.take());
+        self.output = output.or_else(|| self.output.take());
+        self.format = format.or_else(|| self.format.take());
         self.verbose = verbose.or(self.verbose);
         self.quiet = quiet.or(self.quiet);
         self.json = json.or(self.json);
@@ -177,7 +177,7 @@ impl Config {
     }
 }
 
-/// Where the CurseForge key in effect came from.
+/// Where the `CurseForge` key in effect came from.
 ///
 /// Reported by `sculkr config`, because "which of my three keys is this" is
 /// otherwise unanswerable without exposing the key itself.
@@ -201,10 +201,10 @@ impl fmt::Display for KeySource {
 /// A pack's `.sculk` is meant to be committed and shipped with the pack, so a
 /// key written into one is a key handed to everybody who downloads it.
 fn warn_about_committed_key(file: &Path) -> String {
-    let elsewhere = match global_path() {
-        Some(global) => format!(".env or \"{}\"", global.display()),
-        None => ".env".to_owned(),
-    };
+    let elsewhere = global_path().map_or_else(
+        || ".env".to_owned(),
+        |global| format!(".env or \"{}\"", global.display()),
+    );
 
     format!(
         "{CF_API_KEY} is set in \"{}\". A pack {CONFIG_FILE_NAME} is normally committed and \
@@ -268,7 +268,7 @@ impl Loaded {
                 .map(|key| format!("secrets.{key}")),
         );
 
-        for key in unknown.collect::<Vec<_>>() {
+        for key in unknown {
             loaded.warnings.push(format!(
                 "unknown key \"{key}\" in {CONFIG_FILE_NAME}; ignoring it"
             ));
@@ -293,7 +293,7 @@ impl Loaded {
         self.sources.push(file);
     }
 
-    /// The CurseForge key in effect, and where it came from.
+    /// The `CurseForge` key in effect, and where it came from.
     ///
     /// The environment wins over both files: a key exported on this machine
     /// belongs to whoever is sitting at it, while one in a `.sculk` may have

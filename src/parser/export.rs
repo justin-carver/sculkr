@@ -1,20 +1,21 @@
 //! One exportable document describing a pack -- its `pack.toml` metadata, every
-//! `*.pw.toml` record, the project data fetched from Modrinth and CurseForge,
+//! `*.pw.toml` record, the project data fetched from Modrinth and `CurseForge`,
 //! and the settings the run resolved -- serialized as JSON.
 //!
-//! Keys are snake_case throughout and every struct here is written in the order
+//! Keys are `snake_case` throughout and every struct here is written in the order
 //! it should appear, because `serde_json` emits struct fields in declaration
 //! order. Reordering a field reorders the output.
 //!
 //! [`Settings`] is a deliberate *view* rather than `Serialize` on [`Config`].
 //! `Config` owns a [`Secret`](crate::env::Secret), which has no `Serialize` on
-//! purpose; naming each exported field by hand is what keeps a CurseForge key
+//! purpose; naming each exported field by hand is what keeps a `CurseForge` key
 //! out of a file that tends to get committed. Widen it by adding a field here,
 //! never by deriving `Serialize` on `Config`.
 //!
 //! There is deliberately no `generated_at` field. A timestamp would make the
 //! output differ on every run, which breaks `insta` snapshots and makes the
 //! file churn in git for no information.
+#![allow(clippy::doc_markdown)]
 
 use std::{collections::HashSet, path::Path};
 
@@ -52,7 +53,7 @@ pub enum ProjectEntry<'a> {
 /// Everything the cache holds for one project, in a fixed key order.
 ///
 /// Borrowed from [`Mod`] rather than reusing it directly, because `Mod` is
-/// camelCase for the cache file and this document is snake_case.
+/// camelCase for the cache file and this document is `snake_case`.
 #[derive(Serialize, Debug)]
 pub struct ProjectView<'a> {
     pub id: &'a str,
@@ -217,8 +218,8 @@ neoforge = "21.1.249"
             update: PackwizModUpdate {
                 modrinth: None,
                 curseforge: Some(PackwizModUpdateCurseforge {
-                    file_id: 8724782,
-                    project_id: 404468,
+                    file_id: 8_724_782,
+                    project_id: 404_468,
                 }),
             },
             category: Some("mods".into()),
@@ -248,7 +249,6 @@ neoforge = "21.1.249"
     fn render(mods: &[PackwizMod], projects: &[Mod]) -> serde_json::Value {
         let json = generate_document(&sample_pack(), &Config::default(), mods, projects)
             .expect("should serialize");
-
         serde_json::from_str(&json).expect("the export should be valid json")
     }
 
@@ -263,7 +263,7 @@ neoforge = "21.1.249"
         assert_eq!(doc["schema_version"], 1);
 
         assert_eq!(doc["pack"]["name"], "Create Prime");
-        assert_eq!(doc["pack"]["pack_format"], "packwiz:1.1.0");
+        assert_eq!(doc["pack"]["pack-format"], "packwiz:1.1.0");
         assert_eq!(doc["pack"]["versions"]["minecraft"], "1.21.1");
         assert_eq!(doc["pack"]["versions"]["neoforge"], "21.1.249");
 

@@ -103,7 +103,7 @@ impl Cache {
                     Ok(Self {
                         file,
                         is_dirty: true,
-                        data: Default::default(),
+                        data: HashMap::default(),
                     })
                 }
                 // A cache written by an older build is missing any field added since.
@@ -118,7 +118,7 @@ impl Cache {
                         file,
                         // Mark dirty so the stale file is replaced even if nothing changes.
                         is_dirty: true,
-                        data: Default::default(),
+                        data: HashMap::default(),
                     })
                 }
             },
@@ -131,7 +131,7 @@ impl Cache {
                     Ok(Self {
                         file,
                         is_dirty: false,
-                        data: Default::default(),
+                        data: HashMap::default(),
                     })
                 }
                 _ => Err(Error::FileIo(resolved, err, "open cache file")),
@@ -144,7 +144,7 @@ impl Cache {
         self.is_dirty = true;
     }
 
-    pub fn get_data(&self) -> &CacheData {
+    pub const fn get_data(&self) -> &CacheData {
         &self.data
     }
 
@@ -157,7 +157,7 @@ impl Cache {
 
         self.data.retain(|mod_id, _| keep.contains(mod_id));
 
-        let removed = before - self.data.len();
+        let removed = before.saturating_sub(self.data.len());
 
         if removed > 0 {
             self.is_dirty = true;

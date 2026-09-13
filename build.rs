@@ -13,18 +13,26 @@ fn main() {
     let mut found = Vec::new();
     scan(Path::new("src"), &mut found);
 
-    if !found.is_empty() {
-        found.sort();
-        found.dedup();
-        panic!(
-            "compile-time environment lookups found: {}\n\
-       these would be embedded in the binary -- read them at runtime via crate::env instead",
-            found.join(", ")
+    // Sorted so that repeats of one variable sit next to each other below.
+    found.sort();
+    found.dedup();
+
+    let mut emitted: Option<&str> = None;
+    for (var, location) in &found {
+        println!(
+            "cargo::warning={var} is read at compile time in {location}; \
+             its value is blanked in the binary -- read it at runtime via crate::env"
         );
+
+        // rustc-env takes a bare name, so the location only goes in the warning.
+        if emitted != Some(var.as_str()) {
+            println!("cargo::rustc-env={var}=");
+            emitted = Some(var.as_str());
+        }
     }
 }
 
-fn scan(dir: &Path, found: &mut Vec<String>) {
+fn scan(dir: &Path, found: &mut Vec<(String, String)>) {
     let Ok(entries) = dir.read_dir() else { return };
 
     for entry in entries.flatten() {
@@ -36,18 +44,25 @@ fn scan(dir: &Path, found: &mut Vec<String>) {
             let Ok(source) = std::fs::read_to_string(&path) else {
                 continue;
             };
-
             collect(&source, &path, found);
         }
     }
 }
 
 /// `option_env!(` ends in `env!(`, so matching the shorter form catches both.
-fn collect(source: &str, path: &Path, found: &mut Vec<String>) {
-    for (offset, _) in source.match_indices("env!(") {
-        let rest = source[offset + "env!(".len()..].trim_start();
+fn collect(source: &str, path: &Path, found: &mut Vec<(String, String)>) {
+    for (offset, matched) in source.match_indices("env!(") {
+        // chore(clippy): fix new lint errors caused by strict clippy
+        // checked_add keeps `arithmetic_side_effects` happy; get() yields None
+        // rather than panicking on an out-of-range or mid-codepoint index.
+        let Some(rest) = offset
+            .checked_add(matched.len())
+            .and_then(|start| source.get(start..))
+        else {
+            continue;
+        };
 
-        let Some(rest) = rest.strip_prefix('"') else {
+        let Some(rest) = rest.trim_start().strip_prefix('"') else {
             continue;
         };
         let Some(name) = rest.split('"').next() else {
@@ -57,7 +72,7 @@ fn collect(source: &str, path: &Path, found: &mut Vec<String>) {
         // CARGO_* comes from cargo itself: version, crate name, manifest dir. None
         // of it is secret and some of it has no runtime equivalent.
         if !name.starts_with("CARGO_") {
-            found.push(format!("{} in {}", name, path.display()));
+            found.push((name.to_owned(), path.display().to_string()));
         }
     }
 }

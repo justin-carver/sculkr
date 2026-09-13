@@ -12,7 +12,7 @@ use crate::{Error, error::IoContext};
 
 pub const PACK_FILE_NAME: &str = "pack.toml";
 
-/// Deserialized from packwiz's kebab-case, serialized back out as snake_case
+/// Deserialized from packwiz's kebab-case, serialized back out as `snake_case`
 /// so the export reads consistently. `[options]` is ignored.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all(deserialize = "kebab-case", serialize = "snake_case"))]
@@ -21,7 +21,8 @@ pub struct Pack {
     pub author: Option<String>,
     pub version: Option<String>,
     /// e.g. `packwiz:1.1.0`.
-    pub pack_format: Option<String>,
+    #[serde(rename(deserialize = "pack-format", serialize = "pack-format"))]
+    pub format: Option<String>,
     #[serde(default)]
     pub versions: PackVersions,
 
@@ -176,7 +177,7 @@ fabric = "0.14.21"
 
         assert_eq!(pack.name, "Example Pack");
         assert_eq!(pack.author.as_deref(), Some("minecraft_steve"));
-        assert_eq!(pack.pack_format.as_deref(), Some("packwiz:1.1.0"));
+        assert_eq!(pack.format.as_deref(), Some("packwiz:1.1.0"));
         assert_eq!(pack.versions.minecraft.as_deref(), Some("1.20.1"));
     }
 

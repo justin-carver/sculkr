@@ -14,6 +14,7 @@ pub type Projects = Vec<Project>;
 /// carries its own `team_id`, which is what makes them matchable.
 pub type Teams = Vec<Vec<TeamMember>>;
 
+#[allow(clippy::struct_field_names)] // reducing this to `type` throws keyword errors
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Project {
     pub id: String,
@@ -111,14 +112,14 @@ pub fn get_modrinth_v3(endpoint: &str) -> Request {
     get(format!("{MODRINTH_API_V3}{endpoint}"))
 }
 
-pub fn get_modrinth_projects(projects: Vec<ModrinthId>) -> Result<Projects, Error> {
+pub fn get_modrinth_projects(projects: &[ModrinthId]) -> Result<Projects, Error> {
     let json = serde_json::to_string(&projects)?;
     let response = get_modrinth("/projects").with_param("ids", json).send()?;
 
     json_or_error("Modrinth", response)
 }
 
-pub fn get_modrinth_teams(teams: Vec<String>) -> Result<Teams, Error> {
+pub fn get_modrinth_teams(teams: &[String]) -> Result<Teams, Error> {
     let json = serde_json::to_string(&teams)?;
     let response = get_modrinth("/teams").with_param("ids", json).send()?;
 
@@ -130,7 +131,7 @@ pub fn get_modrinth_teams(teams: Vec<String>) -> Result<Teams, Error> {
 /// Modrinth credits a *team* rather than a list of users, so author names cost
 /// a second bulk request keyed by the team ids the first one returned. That
 /// request failing is downgraded to a warning.
-pub fn get_modrinth_mods(ids: Vec<ModrinthId>) -> Result<Vec<crate::request::Mod>, Error> {
+pub fn get_modrinth_mods(ids: &[ModrinthId]) -> Result<Vec<crate::request::Mod>, Error> {
     let projects = get_modrinth_projects(ids)?;
     let by_team = authors_by_team(&projects);
     let by_organization = authors_by_organization(&projects, &by_team);
@@ -186,7 +187,7 @@ fn authors_by_organization(
         return HashMap::new();
     }
 
-    match get_modrinth_organizations(ids) {
+    match get_modrinth_organizations(&ids) {
         Ok(organizations) => organizations
             .into_iter()
             .map(|organization| (organization.id.clone(), organization.into_author()))
@@ -215,7 +216,7 @@ fn authors_by_team(projects: &[Project]) -> HashMap<String, Vec<Author>> {
         return HashMap::new();
     }
 
-    let teams = match get_modrinth_teams(ids) {
+    let teams = match get_modrinth_teams(ids.as_slice()) {
         Ok(teams) => teams,
         Err(err) => {
             log::warn!("could not fetch Modrinth teams ({err}); author names will be missing");
@@ -247,7 +248,7 @@ fn authors_by_team(projects: &[Project]) -> HashMap<String, Vec<Author>> {
         .collect()
 }
 
-pub fn get_modrinth_organizations(ids: Vec<String>) -> Result<Vec<Organization>, Error> {
+pub fn get_modrinth_organizations(ids: &[String]) -> Result<Vec<Organization>, Error> {
     let json = serde_json::to_string(&ids)?;
     let response = get_modrinth_v3("/organizations")
         .with_param("ids", json)
