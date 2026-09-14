@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- next-header -->
 
+## [1.0.0] - 2026-09-13
+
+### Added
+
+- Add --color-mode, --sort-by and --reverse ([#15](https://github.com/justin-carver/sculkr/issues/15))
+- Add --cache and rename the cache file to .sculkr.cache.json
+
+### Changed
+
+- Adopt strict clippy lints and resolve violations ([#14](https://github.com/justin-carver/sculkr/issues/14))
+- Write snake_case field names throughout
+- Document every flag, the cache and the JSON export
+
+### Fixed
+
+- **Breaking:** Write pack.pack_format in snake_case like every other key
+- Report the --cache path in sculkr config
+- Stop the color-mode re-parse from discarding .sculk settings
+- Tell users what to do with a packwiz-modlist cache
+
 ## [0.2.4] - 2026-09-10
 
 ### Changed
@@ -132,7 +152,8 @@ _Maintenance release. No user-facing changes; see the commit log for build, CI a
 ## [0.1.1] - 2026-09-08
 
 <!-- next-url -->
-[Unreleased]: https://github.com/justin-carver/sculkr/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/justin-carver/sculkr/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/justin-carver/sculkr/compare/v0.2.4...v1.0.0
 [0.2.4]: https://github.com/justin-carver/sculkr/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/justin-carver/sculkr/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/justin-carver/sculkr/compare/v0.2.1...v0.2.2

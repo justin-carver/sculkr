@@ -2,7 +2,7 @@
 name = "sculkr"
 description = "Companion CLI for packwiz - generate modlists and track Minecraft modpack changes"
 authors = ["justin-carver"]
-version = "0.2.4"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.88"
 license = "Apache-2.0"
