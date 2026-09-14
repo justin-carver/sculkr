@@ -161,6 +161,21 @@ impl Cli {
         }
     }
 
+    /// Parses `matches` and fills in anything they left unset from `config`.
+    ///
+    /// `main` parses twice: once to find the pack and its `.sculk`, then again
+    /// so clap's own help and errors use the configured color mode. Each parse
+    /// starts from the command line alone, so the config has to be applied to
+    /// the result every time, which is why the two steps are one call.
+    pub(crate) fn from_matches_with(
+        matches: &clap::ArgMatches,
+        config: &crate::config::Config,
+    ) -> Result<Self, clap::Error> {
+        let mut cli = <Self as clap::FromArgMatches>::from_arg_matches(matches)?;
+        cli.apply(config);
+        Ok(cli)
+    }
+
     pub(crate) fn format(&self) -> &str {
         self.format
             .as_deref()
@@ -485,6 +500,52 @@ mod tests {
     #[test]
     fn cli_definition_is_valid() {
         Cli::command().debug_assert();
+    }
+
+    /// [`Cli::from_matches_with`]: a `.sculk` value reaches the run unless the
+    /// command line says otherwise.
+    mod config_overlay {
+        use super::*;
+
+        fn parse(args: &[&str], sculk: &str) -> Cli {
+            let config: crate::config::Config = toml::from_str(sculk).expect("valid config");
+            let matches = cli().try_get_matches_from(args).expect("valid arguments");
+
+            Cli::from_matches_with(&matches, &config).expect("parse matches")
+        }
+
+        const SCULK: &str = r#"
+format = '{NAME}'
+sort-by = "authors"
+reverse = true
+json = true
+output = "modlist.md"
+"#;
+
+        /// The regression: `main` re-parses for the color mode, and the second
+        /// parse used to drop every setting the config had filled in.
+        #[test]
+        fn config_values_survive_a_bare_command_line() {
+            let cli = parse(&["sculkr"], SCULK);
+
+            assert_eq!(cli.format(), "{NAME}");
+            assert_eq!(cli.sort_by(), "authors".parse().expect("a sort key"));
+            assert!(cli.reverse);
+            assert!(cli.json);
+            assert_eq!(cli.output, Some(PathBuf::from("modlist.md")));
+        }
+
+        #[test]
+        fn the_command_line_wins_over_the_config() {
+            let cli = parse(
+                &["sculkr", "-f", "{SLUG}", "-s", "name", "-o", "list.md"],
+                SCULK,
+            );
+
+            assert_eq!(cli.format(), "{SLUG}");
+            assert_eq!(cli.sort_by(), SortKey::default());
+            assert_eq!(cli.output, Some(PathBuf::from("list.md")));
+        }
     }
 
     /// The shape of the CLI: which subcommands and flags exist.

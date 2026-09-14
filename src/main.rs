@@ -134,7 +134,7 @@ fn main() {
     let verbosity = args::Verbosity::resolve(cli.verbose, cli.quiet);
     let color_mode = cli.color_mode.unwrap_or_default();
     let matches = Cli::command().color(color_mode).get_matches();
-    let mut cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    let cli = Cli::from_matches_with(&matches, &loaded.config).unwrap_or_else(|e| e.exit());
 
     // Logging needs to be run after verbosity is resolved, but before any other code that may log.
     setup_logging(verbosity, color_mode);
