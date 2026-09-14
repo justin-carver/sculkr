@@ -367,6 +367,7 @@ mod save {
 /// behind by the projects sculkr was forked from, before the real one loads.
 mod preflight {
     use super::*;
+    const EMPTY_PATHBUF: [PathBuf; 0] = [];
 
     fn sorted(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
         paths.sort_unstable();
@@ -446,7 +447,7 @@ mod preflight {
     fn a_directory_without_old_caches_finds_nothing() {
         let dir = TempDir::new("cache-previous-none");
 
-        assert!(Cache::previous_caches(dir.path()).is_empty());
+        assert_eq!(Cache::previous_caches(dir.path()), EMPTY_PATHBUF);
     }
 
     #[test]
@@ -480,15 +481,15 @@ mod preflight {
         let dir = TempDir::new("cache-previous-current");
         write_cache(&dir.join(CACHE_PATH), CACHE_VERSION, &populated().data);
 
-        assert!(Cache::previous_caches(dir.path()).is_empty());
+        assert_eq!(Cache::previous_caches(dir.path()), EMPTY_PATHBUF);
     }
 
     #[test]
     fn a_directory_named_like_an_old_cache_is_not_one() {
         let dir = TempDir::new("cache-previous-directory");
         fs::create_dir(dir.join(".packwiz-modlist.cache.json")).expect("create fixture directory");
-
-        assert!(Cache::previous_caches(dir.path()).is_empty());
+        let safe_wrap: [PathBuf; 0] = [];
+        assert_eq!(Cache::previous_caches(dir.path()), EMPTY_PATHBUF);
     }
 
     /// The file is only looked for, so one that would not parse is left exactly
