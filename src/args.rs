@@ -268,9 +268,10 @@ impl Runtime {
             crate::parser::pack::find_root(&start).unwrap_or(start),
         );
 
-        // This will assume that the correct cache is assigned `[crate::cache::CACHE_PATH]`
-        // appropriately. This can be modified later to determine or point to an older cache.
-        let cache = crate::util::resolve_for_display(crate::cache::CACHE_PATH);
+        // Determine if the `cli.cache` has been set, or default to hardcoded CACHE_PATH
+        let s = &crate::cache::CACHE_PATH.to_string();
+        #[allow(clippy::unnecessary_lazy_evaluations)]
+        let cache = crate::util::resolve_for_display(cli.cache.as_ref().unwrap_or_else(|| s));
 
         // An absent cache file and an unreadable one both read as "nothing to
         // report", and `Cache::load` already logs which of the two it was.
