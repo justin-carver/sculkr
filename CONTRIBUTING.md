@@ -18,8 +18,8 @@ Please redact `CF_API_KEY` if it ever shows up in output — it shouldn't, since
 the key is wrapped in a `Secret` that redacts itself in both `Display` and
 `Debug`, but check anyway.
 
-Feature ideas are welcome too; the [Todo](README.md#todo) list in the README is
-a good sense of where things are headed.
+Feature ideas are welcome too; the [open issues](https://github.com/justin-carver/sculkr/issues)
+are a good sense of where things are headed.
 
 ## Development setup
 
@@ -97,12 +97,18 @@ A few conventions that aren't obvious from reading a single file:
   organization lookup is the standing example: `/v3` is documented as unstable,
   so a failure there logs a warning and leaves authors empty rather than killing
   the whole run.
-- **`--help` is generated from the same source as the README's placeholder
-  table.** If you add a placeholder, add it in `src/format.rs` and both stay in
-  sync; don't hand-write it into the help text.
+- **`--help` is generated from the placeholder table in `src/format.rs`.** If
+  you add a placeholder, add it there rather than into the help text, and add a
+  matching row to the README's placeholder table, which is written by hand.
 - **Output line breaks come only from the format string.** Values are collapsed
   to single spaces before substitution, because a description containing a
   newline would otherwise split a table row across lines.
+- **Test suites live in `src/tests/`, one file per module.** The module under
+  test declares its suite with `#[cfg(test)] #[path = "tests/<module>.rs"] mod
+  tests;`, so the suite stays a child module and can reach private items
+  without widening their visibility. Fixtures more than one suite needs go in
+  `src/tests/support.rs`. Suites still written inline in their module (`args`,
+  `config`, `env`, `format`, `request` and the parsers) move over as they grow.
 
 ## Commits and changelog
 
