@@ -368,13 +368,9 @@ mod save {
 mod preflight {
     use super::*;
 
-    fn files(found: &[Result<Cache, Error>]) -> Vec<PathBuf> {
-        let mut files: Vec<PathBuf> = found
-            .iter()
-            .map(|result| result.as_ref().expect("a readable cache").file.clone())
-            .collect();
-        files.sort_unstable();
-        files
+    fn sorted(mut paths: Vec<PathBuf>) -> Vec<PathBuf> {
+        paths.sort_unstable();
+        paths
     }
 
     #[test]
@@ -462,12 +458,11 @@ mod preflight {
 
         let found = Cache::previous_caches(dir.path());
 
-        let mut expected: Vec<PathBuf> = PREVIOUS_CACHE_FILES
+        let expected = PREVIOUS_CACHE_FILES
             .iter()
             .map(|name| dir.join(name))
             .collect();
-        expected.sort_unstable();
-        assert_eq!(files(&found), expected);
+        assert_eq!(sorted(found), sorted(expected));
     }
 
     #[test]
@@ -477,7 +472,7 @@ mod preflight {
 
         let found = Cache::previous_caches(dir.path());
 
-        assert_eq!(files(&found), [dir.join(".packwizml.cache.json")]);
+        assert_eq!(found, [dir.join(".packwizml.cache.json")]);
     }
 
     #[test]
@@ -486,5 +481,33 @@ mod preflight {
         write_cache(&dir.join(CACHE_PATH), CACHE_VERSION, &populated().data);
 
         assert!(Cache::previous_caches(dir.path()).is_empty());
+    }
+
+    #[test]
+    fn a_directory_named_like_an_old_cache_is_not_one() {
+        let dir = TempDir::new("cache-previous-directory");
+        fs::create_dir(dir.join(".packwiz-modlist.cache.json")).expect("create fixture directory");
+
+        assert!(Cache::previous_caches(dir.path()).is_empty());
+    }
+
+    /// The file is only looked for, so one that would not parse is left exactly
+    /// as it was found.
+    #[test]
+    fn an_old_cache_is_found_without_being_rewritten() {
+        let dir = TempDir::new("cache-previous-untouched");
+        let old = dir.join(".packwiz-modlist.cache.json");
+        fs::write(&old, r#"{"AANobbMI":{"cacheId":"v1"}}"#).expect("write fixture");
+
+        Cache::preflight(dir.path());
+
+        assert_eq!(
+            Cache::previous_caches(dir.path()),
+            std::slice::from_ref(&old)
+        );
+        assert_eq!(
+            fs::read_to_string(&old).expect("read back"),
+            r#"{"AANobbMI":{"cacheId":"v1"}}"#
+        );
     }
 }

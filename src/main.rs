@@ -70,7 +70,6 @@ fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Er
 
     Cache::preflight(pack_root);
 
-    // TODO: Need to ensure there is really good test covereage for cache file I/O
     let cache = cli
         .cache
         .as_ref()

@@ -166,11 +166,15 @@ impl Cache {
         Self::load(cache_path).map(Some)
     }
 
-    /// Every old fork cache file in `dir`, read or failed.
-    fn previous_caches(dir: &Path) -> Vec<Result<Self, Error>> {
+    /// Every old fork cache file in `dir`.
+    ///
+    /// Only looked for, never read: reading one through [`Self::load`] would
+    /// log that it is being rebuilt, and nothing ever touches these files.
+    fn previous_caches(dir: &Path) -> Vec<PathBuf> {
         PREVIOUS_CACHE_FILES
             .iter()
-            .filter_map(|name| Self::try_read(dir.join(name)).transpose())
+            .map(|name| dir.join(name))
+            .filter(|path| path.is_file())
             .collect()
     }
 
@@ -186,20 +190,16 @@ impl Cache {
             return;
         }
 
-        for result in &found {
-            match result {
-                // TODO: This should probably state this to the user in a better way
-                Ok(cache) => log::warn!(
-                    "older cache file detected: {}",
-                    cache.file.as_path().display()
-                ),
-                Err(e) => log::error!("{}", format_args!("{e:#?}")),
-            }
+        for path in &found {
+            log::warn!(
+                "found a packwiz-modlist cache at \"{}\"",
+                crate::util::resolve_for_display(path).display()
+            );
         }
 
         // TODO: Implement `sculkr convert` to migrate older/broken caches to .sculkr.cache.json
         log::warn!(
-            "if any of these should be converted, please run `sculkr convert <CACHE_PATH>`."
+            "sculkr does not read packwiz-modlist caches and keeps its own in {CACHE_PATH}, so the old file can be deleted"
         );
     }
 
