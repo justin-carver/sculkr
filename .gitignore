@@ -1,5 +1,6 @@
 # sculkr
 test/
+.sculk
 .sculkr.cache.json
 .env
 .env.bak
