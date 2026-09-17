@@ -42,7 +42,6 @@ impl Secret {
             return "<redacted>".to_owned();
         }
 
-        // let head: String = chars[..KEEP].iter().collect();
         let head: String = chars
             .get(..KEEP)
             .map_or_else(String::new, |head| head.iter().collect());

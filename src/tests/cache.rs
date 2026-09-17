@@ -18,6 +18,7 @@ fn empty_at(file: PathBuf) -> Cache {
         file,
         is_dirty: false,
         data: HashMap::default(),
+        diff: CacheDiff::default(),
     }
 }
 

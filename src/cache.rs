@@ -34,13 +34,12 @@ pub type CacheData = HashMap<String, CacheMod>;
 /// 2: Modrinth authors, which entries written before then left empty.
 /// 3: `snake_case` field names throughout, where [`Mod`] was camelCase.
 pub const CACHE_VERSION: u32 = 3;
-
 /// The on-disk shape. Generic over the map so writing can borrow it and
 /// reading can own it, without a second struct or a clone of the whole cache.
 #[derive(Serialize, Deserialize, Debug, Clone)]
-struct CacheFile<M> {
+struct CacheFile<ModRef> {
     version: u32,
-    mods: M,
+    mods: ModRef,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -74,11 +73,27 @@ impl From<crate::parser::ParsedCurseForgeId> for CacheId {
     }
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct VersionChange {
+    pub id: String,
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Serialize, Deserialize, Default, Debug, Clone)]
+pub struct CacheDiff {
+    pub added: Vec<String>,
+    pub removed: Vec<String>,
+    pub changed: Vec<VersionChange>, // mod version change
+    pub unchanged: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct Cache {
     file: PathBuf,
     is_dirty: bool,
     data: CacheData,
+    diff: CacheDiff,
 }
 
 impl Cache {
@@ -103,6 +118,7 @@ impl Cache {
                         file,
                         is_dirty: false,
                         data: cache.mods,
+                        diff: CacheDiff::default(),
                     })
                 }
                 Ok(cache) => {
@@ -115,6 +131,7 @@ impl Cache {
                         file,
                         is_dirty: true,
                         data: HashMap::default(),
+                        diff: CacheDiff::default(),
                     })
                 }
                 // A cache written by an older build is missing any field added since.
@@ -130,6 +147,7 @@ impl Cache {
                         // Mark dirty so the stale file is replaced even if nothing changes.
                         is_dirty: true,
                         data: HashMap::default(),
+                        diff: CacheDiff::default(),
                     })
                 }
             },
@@ -143,6 +161,7 @@ impl Cache {
                         file,
                         is_dirty: false,
                         data: HashMap::default(),
+                        diff: CacheDiff::default(),
                     })
                 }
                 _ => Err(Error::FileIo(resolved, err, "open cache file")),
@@ -217,11 +236,15 @@ impl Cache {
     /// [`Self::set_mod`] overwrites by key, so updated mods replace themselves
     /// cleanly. Returns how many were pruned.
     pub fn retain_only(&mut self, keep: &HashSet<String>) -> usize {
-        let before = self.data.len();
+        let before = self.diff.removed.len();
 
-        self.data.retain(|mod_id, _| keep.contains(mod_id));
+        self.diff.removed.extend(
+            self.data
+                .extract_if(|mod_id, _| !keep.contains(mod_id))
+                .map(|(mod_id, _)| mod_id),
+        );
 
-        let removed = before.saturating_sub(self.data.len());
+        let removed = self.diff.removed.len().saturating_sub(before);
 
         if removed > 0 {
             self.is_dirty = true;
@@ -237,10 +260,23 @@ impl Cache {
         let id = id.into();
 
         self.is_dirty = true;
-        self.data.insert(id.mod_id, CacheMod {
-            cache_id: id.cache_id,
+        let prev_mod = self.data.insert(id.mod_id.clone(), CacheMod {
+            cache_id: id.cache_id.clone(),
             data,
         });
+
+        match prev_mod {
+            // The version of the mod has changed, so lets update the `CacheDiff`.
+            Some(pm) if id.cache_id != pm.cache_id => self.diff.changed.push(VersionChange {
+                id: id.mod_id,
+                from: pm.cache_id,
+                to: id.cache_id,
+            }),
+            // This is the exact same mod, do not update the diff
+            Some(_) => (),
+            // This is a brand new mod being added to the cache
+            None => self.diff.added.push(id.mod_id),
+        }
     }
 
     pub fn get_mod<T>(&self, id: T) -> Option<&Mod>
@@ -254,6 +290,13 @@ impl Cache {
             Some(&m.data)
         } else {
             None
+        }
+    }
+
+    pub fn get_diff(self) -> CacheDiff {
+        CacheDiff {
+            unchanged: 20,
+            ..self.diff
         }
     }
 

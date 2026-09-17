@@ -270,6 +270,8 @@ impl App {
     pub fn close(&self) -> Result<(), Error> {
         let mut cache = self.cache.borrow_mut();
 
+        // Right now, this is kinda hardcoded to only accept Modrinth + CurseForge...
+        // May look into this later-later...
         let installed: HashSet<String> = self
             .modrinth_mods
             .iter()
