@@ -66,6 +66,47 @@ pub struct PackwizMod {
     pub path: PathBuf,
 }
 
+/// Matches `1.21.1` or `v0.6.5`, returning it without the `v`.
+///
+/// Requires at least one dot.
+fn version_token(token: &str) -> Option<&str> {
+    let token = token.strip_prefix('v').unwrap_or(token);
+    let mut parts = token.split('.');
+
+    let numeric = parts
+        .clone()
+        .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()));
+
+    (numeric && parts.nth(1).is_some()).then_some(token)
+}
+
+/// Reads a mod's release out of the jar filename packwiz records.
+///
+/// Takes the last version-shaped token, skipping `minecraft` where the pack
+/// names it: `jei-1.21.1-neoforge-19.21.0.247.jar` is `19.21.0.247`.
+///
+/// `None` when nothing in the name looks like a version.
+pub fn release_version(filename: &str, minecraft: Option<&str>) -> Option<String> {
+    let stem = filename.strip_suffix(".jar").unwrap_or(filename);
+
+    let candidates: Vec<&str> = stem
+        .split(['-', '+', '_'])
+        .filter_map(version_token)
+        .collect();
+
+    let filtered: Vec<&str> = candidates
+        .iter()
+        .copied()
+        .filter(|token| Some(*token) != minecraft)
+        .collect();
+
+    // Keep the Minecraft version where it is the only candidate.
+    filtered
+        .last()
+        .or_else(|| candidates.last())
+        .map(|token| (*token).to_owned())
+}
+
 #[derive(Debug, Clone)]
 pub struct PackwizParser {
     pub modrinth_mods: Vec<ParsedModrinthId>,
@@ -234,5 +275,87 @@ impl Parser for PackwizParser {
 
     fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId> {
         self.curseforge_mods.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// [`release_version`]: reading a release off a jar filename.
+    mod release {
+        use super::*;
+
+        const MC: Option<&str> = Some("1.21.1");
+
+        /// Real packwiz filenames across both hosts and every loader.
+        #[test]
+        fn the_mods_own_release_wins_over_the_minecraft_version() {
+            for (filename, want) in [
+                ("sodium-fabric-0.6.5+mc1.21.1.jar", "0.6.5"),
+                ("lithium-fabric-0.14.3+mc1.21.1.jar", "0.14.3"),
+                ("jei-1.21.1-neoforge-19.21.0.247.jar", "19.21.0.247"),
+                ("Create-1.21.1-6.0.4.jar", "6.0.4"),
+                ("appliedenergistics2-19.2.5.jar", "19.2.5"),
+                ("ftb-teams-neoforge-2101.1.5.jar", "2101.1.5"),
+                ("iris-fabric-1.8.8+mc1.21.1.jar", "1.8.8"),
+                (
+                    "DistantHorizons-2.3.0-b-1.21.1-neoforge-fabric.jar",
+                    "2.3.0",
+                ),
+                ("journeymap-neoforge-1.21.1-6.0.0-beta.29.jar", "6.0.0"),
+                ("modmenu-11.0.3.jar", "11.0.3"),
+                ("cloth-config-15.0.140-neoforge.jar", "15.0.140"),
+                ("architectury-13.0.8-neoforge.jar", "13.0.8"),
+                ("Xaeros_Minimap_25.2.0_NeoForge_1.21.1.jar", "25.2.0"),
+                ("voicechat-neoforge-1.21.1-2.5.29.jar", "2.5.29"),
+            ] {
+                assert_eq!(
+                    release_version(filename, MC).as_deref(),
+                    Some(want),
+                    "parsing {filename}"
+                );
+            }
+        }
+
+        /// The Minecraft version is kept when nothing else is left.
+        #[test]
+        fn the_minecraft_version_is_kept_when_it_is_all_there_is() {
+            assert_eq!(
+                release_version("somemod-1.21.1.jar", MC).as_deref(),
+                Some("1.21.1")
+            );
+        }
+
+        /// What `None` costs: a filename carrying both versions can only
+        /// guess at which is the mod's.
+        #[test]
+        fn an_unknown_minecraft_version_falls_back_to_the_last_token() {
+            assert_eq!(
+                release_version("jei-1.21.1-neoforge-19.21.0.247.jar", None).as_deref(),
+                Some("19.21.0.247")
+            );
+            assert_eq!(
+                release_version("DistantHorizons-2.3.0-b-1.21.1-neoforge.jar", None).as_deref(),
+                Some("1.21.1"),
+                "the mc version wins here, which is why the pack's is passed in"
+            );
+        }
+
+        #[test]
+        fn a_name_with_no_version_in_it_is_none() {
+            assert_eq!(release_version("ftb-teams-neoforge.jar", MC), None);
+            assert_eq!(release_version("somemod.jar", MC), None);
+            // A trailing digit is not a version; it needs a dot.
+            assert_eq!(release_version("appliedenergistics2.jar", MC), None);
+        }
+
+        #[test]
+        fn a_leading_v_is_dropped() {
+            assert_eq!(
+                release_version("somemod-v1.2.3.jar", MC).as_deref(),
+                Some("1.2.3")
+            );
+        }
     }
 }
