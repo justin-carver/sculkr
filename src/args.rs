@@ -687,7 +687,7 @@ output = "modlist.md"
                 ],
                 config_home: Some(PathBuf::from("/home/user/.config/sculkr/.sculk")),
                 mods: Some((32, 15)),
-                cache: PathBuf::from("/home/user/modpack/.packwiz-modlist.cache.json"),
+                cache: PathBuf::from("/home/user/modpack/.sculkr.cache.json"),
                 cache_entries: Some(38),
                 api_key: Some((
                     "$2a$...e345".to_owned(),

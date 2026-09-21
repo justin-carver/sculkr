@@ -17,7 +17,7 @@ expression: rendered
 
   Pack root:   /home/user/modpack
   Mods:        47 (32 Modrinth, 15 CurseForge)
-  Cache:       /home/user/modpack/.packwiz-modlist.cache.json (38 cached)
+  Cache:       /home/user/modpack/.sculkr.cache.json (38 cached)
 
 ┏━ ▓▒░ Secrets ░▒▓ ━━━━━━━━━━━━━━━╾──────────────┈┈┈┈┈┈┈┈┈┈┈┈
 
