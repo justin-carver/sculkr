@@ -9,13 +9,8 @@
 [![release](https://img.shields.io/github/v/release/justin-carver/sculkr?style=flat-square&logo=github&label=release&sort=semver)](https://github.com/justin-carver/sculkr/releases/latest)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/justin-carver/sculkr/ci.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI)](https://github.com/justin-carver/sculkr/actions/workflows/ci.yml)
-[![GitHub_Actions](https://img.shields.io/github/actions/workflow/status/justin-carver/sculkr/ci.yml?branch=main&style=flat-square&logo=github&logoColor=white&label=GitHub%20Actions)](https://github.com/justin-carver/sculkr/actions/workflows/ci.yml)
-
-![install_size](https://img.shields.io/crates/size/sculkr?style=flat-square&logo=rust&label=install%20size&link=https%3A%2F%2Fcrates.io%2Fcrates%2Fsculkr)
 [![msrv](https://img.shields.io/badge/MSRV-1.88%2B-b7410e?style=flat-square&logo=rust&logoColor=white)](https://github.com/justin-carver/sculkr/blob/main/Cargo.toml)
-[![platforms](https://img.shields.io/badge/platforms-linux%20%7C%20macOS%20%7C%20Windows-blue?style=flat-square)](https://github.com/justin-carver/sculkr/releases/latest)
 [![license](https://img.shields.io/crates/l/sculkr?style=flat-square&color=DFBE6F)](https://github.com/justin-carver/sculkr/blob/main/LICENSE)
-[![PRs](https://img.shields.io/badge/Welcome!-brightgreen?style=flat-square&logoColor=white&label=PRs)](https://github.com/justin-carver/sculkr/actions/workflows/ci.yml)
 
 A companion CLI application for `packwiz` that parses its output data to deliver advanced utility commands and extended features for Minecraft modpack development.
 
@@ -29,6 +24,7 @@ A companion CLI application for `packwiz` that parses its output data to deliver
 - **JSON export** of the entire pack with `--json`, for feeding other tools. See [JSON Export](#json-export).
 - **Folder-agnostic**, so `resourcepacks/`, `shaderpacks/` and `datapacks/` are listed too.
 - **Cached per pinned version.** A fully cached run makes zero API calls. See [Cache](#cache).
+- **`sculkr diff`** shows what changed since the last run, offline. See [Tracking Changes](#tracking-changes).
 - **Shareable config** in committed `.sculk` files, global and per-pack.
 - **Keeps `CF_API_KEY` out of your pack**, redacted in output and never written to output files.
 - **Pipes cleanly**, since every log line goes to stderr instead of into your modlist.
@@ -39,7 +35,12 @@ Requires Rust **1.88** or newer (edition 2024).
 
 ### Dependencies
 
-`sculkr` reads the files [packwiz](https://github.com/packwiz/packwiz) writes (`pack.toml`, `index.toml` and every `*.pw.toml`) and never runs packwiz itself, so packwiz only needs to be installed wherever you manage the pack. It also **does not** modify your pack; the only files it writes are its own [cache](#cache) and the output file you name. [Writing to packs is under discussion.](https://github.com/justin-carver/sculkr/issues/10)
+`sculkr` reads the files [packwiz](https://github.com/packwiz/packwiz) writes
+(`pack.toml`, `index.toml` and every `*.pw.toml`) and never runs packwiz itself,
+so packwiz only needs to be installed wherever you manage the pack. It does not
+modify your pack — the only files it writes are its own [cache](#cache) and the
+output file you name.
+[Writing to packs is under discussion.](https://github.com/justin-carver/sculkr/issues/10)
 
 ### From crates.io
 
@@ -49,18 +50,14 @@ cargo install sculkr
 
 ### Prebuilt binaries
 
-Every tagged release ships archives for Linux, macOS, and Windows on the
-[releases page](https://github.com/justin-carver/sculkr/releases/latest) — x86_64 and
-aarch64 for Linux and macOS, x86_64 for Windows. Download the archive for your
-platform, extract it, and put `sculkr` somewhere on your `PATH`.
-
-Each release also carries `SHA256SUMS.txt` and a build provenance attestation:
+Every tagged release ships archives on the
+[releases page](https://github.com/justin-carver/sculkr/releases/latest) — x86_64
+and aarch64 for Linux and macOS, x86_64 for Windows. Extract one and put `sculkr`
+on your `PATH`. Each release also carries `SHA256SUMS.txt` and a provenance
+attestation:
 
 ```sh
-# Checksums
 sha256sum --check --ignore-missing SHA256SUMS.txt
-
-# Provenance — proves the archive came from this repo's release workflow
 gh attestation verify sculkr-<version>-<target>.tar.gz --repo justin-carver/sculkr
 ```
 
@@ -107,18 +104,17 @@ Two files are read, and then merged, in descending order. Anything passed on the
 `sculkr config` prints which files were found. Keep in mind:
 
 - **Relative paths resolve against the file they are written in**, not the
-  working directory, so a `path` in the global config means the same thing from
-  anywhere.
-- **Use single quotes for `format`.** TOML resolves `\n` inside double quotes;
-  a literal string hands the escape through to the
-  formatter, which is where the [formatting notes](#formatting-notes) apply.
-- **An unknown key is a warning, not an error.** If the key does not exist, or does not
-  parse due to a typo, then it will not be read.
-- **.sculk files <u>should</u> be pushed to Git and bundled with modpacks, .env should not.** This allows modpack maintainers to create configurations that are shared between users. That is also exactly why the `[secrets]` table below needs care.
+  working directory, so a global `path` means the same thing from anywhere.
+- **Use single quotes for `format`.** TOML resolves `\n` inside double quotes; a
+  literal string hands the escape to the formatter instead.
+- **An unknown or unparseable key is a warning, not an error.** It is skipped.
+- **`.sculk` files belong in Git, `.env` does not.** Committing one lets a pack
+  ship its own configuration, which is exactly why `[secrets]` below needs care.
 
 ### Secrets in `.sculk`
 
-A `.sculk` may carry a CurseForge key, or potentially future secrets, so one file can serve every pack on the machine instead of a `.env` per pack:
+A `.sculk` may carry a CurseForge key, so one file can serve every pack on the
+machine instead of a `.env` per pack:
 
 ```toml
 # ~/.config/sculkr/.sculk
@@ -171,14 +167,12 @@ sculkr
 sculkr -p ~/modpack/mods
 
 # Write it to a file instead of stdout, and overwrite it on later runs
-sculkr -p ~/modpack -o modlist.md
 sculkr -p ~/modpack -o modlist.md --force
 
 # Apply a custom template, one mod per line
 sculkr -f '{INDEX}. {NAME} ({SLUG}) - {LICENSE_ID}\n'
 
 # Sort by author instead of name (A-Z), or Z-A with --reverse
-sculkr --sort-by authors
 sculkr --sort-by authors --reverse
 
 # The whole pack as JSON, for other tools
@@ -187,13 +181,10 @@ sculkr --json -o pack.json
 # Debug logging on stderr, modlist still outputs cleanly to file
 sculkr -vv -o modlist.md
 
-# Just the mod names, nothing else
-sculkr -q -f '{NAME}\n'
+# See what changed since the last run, without fetching anything
+sculkr diff
 
-# Version, authors, repository
-sculkr about
-
-# View runtime information about sculkr and the modpack
+# Runtime information about sculkr and the modpack
 sculkr config
 ```
 
@@ -206,6 +197,9 @@ clean.
 
 Anything in the `.sculk` column can be set in a [`.sculk` file](#sculk-config-files)
 instead. A flag on the command line always wins over the file.
+
+<details>
+<summary><strong>Every flag</strong></summary>
 
 | Flag                  | `.sculk` key | Default             | Description                                                                                                   |
 | --------------------- | ------------ | ------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -223,14 +217,63 @@ instead. A flag on the command line always wins over the file.
 | `-h`, `--help`        |              |                     | `-h` for a summary, `--help` for the full text, including every placeholder.                                  |
 | `-V`, `--version`     |              |                     | Print the version.                                                                                            |
 
+</details>
+
 ### Commands
 
 | Command         | Description                                                                                             |
 | --------------- | ------------------------------------------------------------------------------------------------------- |
 | _(none)_        | Generate the modlist, or the JSON export with `--json`.                                                 |
 | `sculkr config` | Show the settings in effect and where each came from: config files, pack root, mod counts, cache, and which `CF_API_KEY` source is used. Makes no API calls. |
+| `sculkr diff`   | Show what the next run would fetch, update and prune. Makes no API calls. See [Tracking Changes](#tracking-changes). |
 | `sculkr about`  | Version, authors and repository.                                                                        |
 | `sculkr help`   | Same as `--help`; `sculkr help <command>` for one command.                                              |
+
+## Tracking Changes
+
+`sculkr diff` compares the versions your pack pins against what the cache holds,
+and prints what the next run would do. It reads the pack and the cache off disk
+and makes no API calls, so it works offline and without a CurseForge key.
+
+```
+  ⣿ sculkr ⣿
+  Changes since the last cached state
+
+  + Added (2)
+      Iris Shaders      modrinth
+      Distant Horizons  curseforge
+
+  - Removed (1)
+      OptiFabric        modrinth
+
+  ~ Updated (2)
+      Sodium            0.6.0   -> 0.6.5
+      Lithium           0.14.0  -> 0.14.3
+
+  45 mods, 41 unchanged
+
+  Run sculkr to merge these into the cache (fetch 2, update 2, drop 1).
+```
+
+| Section     | Meaning                                                              |
+| ----------- | -------------------------------------------------------------------- |
+| `Added`     | Pinned by the pack, not in the cache. The next run fetches it.       |
+| `Removed`   | Still cached, no longer in the pack. The next run prunes it.         |
+| `Updated`   | Pinned to a different version than the cache holds.                  |
+| `Unchanged` | Pinned to the version already cached, and served without a request.  |
+
+Version numbers are read from the jar filename packwiz records, skipping the
+pack's Minecraft version so `jei-1.21.1-neoforge-19.21.0.247.jar` reads as
+`19.21.0.247`. Where a filename carries no version at all, the pinned id is
+shown in its place.
+
+A normal run reports the same thing on stderr once it finishes, at `-v`:
+
+```
+INFO  [sculkr::app] cache updated: 2 added, 2 updated, 1 removed (41 unchanged)
+```
+
+`-vv` adds a line per mod. Nothing is printed when the cache already matches.
 
 ## Cache
 
@@ -241,6 +284,8 @@ one entry per mod, keyed on the version the pack pins:
   served from the cache, so a run with nothing new makes no API calls.
 - **Mods removed from the pack are pruned** from the cache at the end of the run,
   and the file is only rewritten when something changed.
+- **Each entry records the release it is pinned to**, which is what lets
+  [`sculkr diff`](#tracking-changes) print version numbers instead of raw ids.
 - **An unreadable cache, or one from an older sculkr, is not an error.** It is
   treated as empty and rebuilt, which costs one round of API calls.
 - **The cache is written to the working directory** by default, or wherever
@@ -295,6 +340,9 @@ wherever you want a line break — nothing is appended for you. Placeholder name
 are case-insensitive, and a bad template is rejected before any API calls are
 made.
 
+<details>
+<summary><strong>Every placeholder</strong></summary>
+
 | Placeholder               | Value                                                     |
 | ------------------------- | --------------------------------------------------------- |
 | `{ID}`                    | Project id (Modrinth base62, CurseForge numeric)          |
@@ -314,10 +362,13 @@ made.
 | `{AUTHORS_MD}`            | Authors as markdown links                                 |
 | `{INDEX}`                 | This mod's position in the list, starting at 1            |
 
+</details>
+
 A placeholder with no value for a given mod renders as an empty string.
 `sculkr --help` prints the same table, generated from the same source.
 
-### Formatting Notes
+<details>
+<summary><strong>Formatting notes</strong></summary>
 
 - Line breaks _inside_ a value are collapsed to single spaces before
   substitution. Both Modrinth and CurseForge allow them in a description, and one arriving mid-entry
@@ -327,26 +378,27 @@ A placeholder with no value for a given mod renders as an empty string.
 - CurseForge exposes no license anywhere in its public API, even though it is shown on the project page. `{LICENSE*}` is
   therefore empty for CurseForge mods.
 
-- Modrinth author names cost extra lookups, because a project is credited to a
-  _Team_ rather than to a list of users:
-    - Team members come from a bulk `/v2/teams` call, sorted owner-first so the
-      credit line is stable between runs.
-    - A project owned by an _organization_ has an empty team, and the site credits
-      the organization — so `{AUTHORS}` gets the organization
-      (`Forgified Fabric API :: Sinytra`). This is the one place `sculkr` touches
-      Modrinth's `/v3` API, which is documented as unstable, so a failure there
-      logs a warning and leaves those authors empty rather than failing the run... perhaps it'll be stable later.
+- Modrinth credits a _Team_ rather than a list of users, so author names cost a
+  bulk `/v2/teams` call, sorted owner-first to keep the credit line stable. A
+  project owned by an _organization_ has an empty team and is credited to the
+  organization instead (`Forgified Fabric API :: Sinytra`). That is the one place
+  `sculkr` touches Modrinth's `/v3` API, which is documented as unstable; a
+  failure there warns and leaves those authors empty rather than failing the run.
 
 **Neither API lookup runs when every mod is already cached.**
+
+</details>
 
 > If you are getting rate-limited by an API, run `sculkr` once your mod changes
 > are finished rather than after each one, so the cache is only refreshed once.
 
 ## Issues & Contributions
 
-If you encounter any bugs, have questions, or notice areas for improvement, your feedback is highly welcome! Please feel free to open an issue to report problems or suggest enhancements. If you'd like to contribute directly, you can also submit a PR with your proposed fixes or updates, and I'll get to it when I can.
+Bug reports, questions and suggestions are all welcome — open an
+[issue](https://github.com/justin-carver/sculkr/issues), or send a PR.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up a development environment, what CI checks against, and how releases are cut.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to set up a development
+environment, what CI checks against, and how releases are cut.
 
 ---
 
@@ -354,6 +406,5 @@ _<strong>sculkr</strong> began as a fork of [packwiz-modlist](https://github.com
 by Ricky12Awesome, rewritten and renamed with their consent ([discussion](https://github.com/Ricky12Awesome/packwiz-modlist/issues/4)).
 Most of it has since been rewritten from the ground up._
 
-_Everything `packwiz-modlist` offered has been ported over, with its functionality reworked where that made more sense. New features are tracked in [issues](https://github.com/justin-carver/sculkr/issues); if you have an idea, or would like something yourself, open one!_
-
-_Licensed under Apache-2.0; see [NOTICE](NOTICE)._
+_Everything `packwiz-modlist` offered has been ported over, reworked where that
+made more sense. Licensed under Apache-2.0; see [NOTICE](NOTICE)._
