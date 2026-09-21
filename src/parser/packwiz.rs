@@ -125,7 +125,14 @@ impl PackwizParser {
     ///
     /// A pack with no index falls back to scanning `pack_root` itself, which
     /// keeps a bare directory of `*.pw.toml` files working.
-    pub fn load_from<P>(pack_root: P, index_file: Option<&str>) -> Result<Self, Error>
+    ///
+    /// `minecraft` is the pack's Minecraft version, skipped when reading a
+    /// release off a filename.
+    pub fn load_from<P>(
+        pack_root: P,
+        index_file: Option<&str>,
+        minecraft: Option<&str>,
+    ) -> Result<Self, Error>
     where
         P: AsRef<Path>,
     {
@@ -144,7 +151,7 @@ impl PackwizParser {
             Self::from_directory(pack_root)?
         };
 
-        Ok(Self::from_records(parsed_mods))
+        Ok(Self::from_records(parsed_mods, minecraft))
     }
 
     fn from_index(pack_root: &Path, index_path: &Path) -> Result<Vec<PackwizMod>, Error> {
@@ -237,22 +244,24 @@ impl PackwizParser {
         Ok(parsed_mods)
     }
 
-    fn from_records(parsed_mods: Vec<PackwizMod>) -> Self {
+    fn from_records(parsed_mods: Vec<PackwizMod>, minecraft: Option<&str>) -> Self {
         let modrinth_mods = parsed_mods
             .iter()
-            .filter_map(|m| m.update.modrinth.as_ref())
-            .map(|data| ParsedModrinthId {
+            .filter_map(|m| m.update.modrinth.as_ref().map(|data| (m, data)))
+            .map(|(record, data)| ParsedModrinthId {
                 cache_id: data.version.clone(),
                 id: data.mod_id.clone(),
+                version_name: release_version(&record.filename, minecraft),
             })
             .collect();
 
         let curseforge_mods = parsed_mods
             .iter()
-            .filter_map(|m| m.update.curseforge.as_ref())
-            .map(|data| ParsedCurseForgeId {
+            .filter_map(|m| m.update.curseforge.as_ref().map(|data| (m, data)))
+            .map(|(record, data)| ParsedCurseForgeId {
                 cache_id: data.file_id.to_string(),
                 id: data.project_id,
+                version_name: release_version(&record.filename, minecraft),
             })
             .collect();
 

@@ -1,0 +1,23 @@
+---
+source: src/args.rs
+expression: rendered
+---
+
+  ⣿ sculkr ⣿
+  Changes since the last cached state
+
+  + Added (2)
+      Iris Shaders      modrinth
+      Distant Horizons  curseforge
+
+  - Removed (1)
+      OptiFabric        modrinth
+
+  ~ Updated (3)
+      Sodium            0.6.0   -> 0.6.5
+      Lithium           0.14.0  -> 0.14.3
+      JEI               5101366 -> 19.21.1
+
+  46 mods, 41 unchanged
+
+  Run sculkr to merge these into the cache (fetch 2, update 3, drop 1).

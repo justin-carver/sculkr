@@ -10,7 +10,9 @@ use std::{
 };
 
 use super::*;
-use crate::tests::support::{TempDir, curseforge, modrinth, sample_mod};
+use crate::tests::support::{
+    TempDir, curseforge, curseforge_release, modrinth, modrinth_release, sample_mod,
+};
 
 /// A clean, empty cache pointed at `file`.
 fn empty_at(file: PathBuf) -> Cache {
@@ -32,7 +34,11 @@ fn populated_at(file: PathBuf) -> Cache {
         modrinth("gvQqBUqZ", "v1"),
         sample_mod("gvQqBUqZ", "Lithium"),
     );
-    cache.set_mod(curseforge(238_222, "5101366"), sample_mod("238222", "JEI"));
+    // A CurseForge entry carries a CurseForge url, which is what names the
+    // source of an entry the pack no longer pins.
+    let mut jei = sample_mod("238222", "JEI");
+    jei.mod_url = "https://www.curseforge.com/minecraft/mc-mods/jei".to_owned();
+    cache.set_mod(curseforge(238_222, "5101366"), jei);
     cache.is_dirty = false;
 
     cache
@@ -137,6 +143,241 @@ mod lookup {
                 .map(|m| m.title.as_str()),
             Some("JEI")
         );
+    }
+}
+
+/// [`Cache::diff_against`]: what the next run would do, compared against the
+/// pack without fetching anything.
+mod diff_against {
+    use super::*;
+
+    const EMPTY_IDS: [&str; 0] = [];
+
+    /// The pack's pins as [`Cache::diff_against`] takes them, each named
+    /// after its own id.
+    fn pinned(mr: &[(&str, &str)], cf: &[(i32, &str)]) -> Vec<PinnedMod> {
+        mr.iter()
+            .map(|(id, version)| PinnedMod {
+                id: CacheId::from(modrinth(id, version)),
+                name: format!("{id}-name"),
+                source: Source::Modrinth,
+            })
+            .chain(cf.iter().map(|(id, file)| PinnedMod {
+                id: CacheId::from(curseforge(*id, file)),
+                name: format!("{id}-name"),
+                source: Source::CurseForge,
+            }))
+            .collect()
+    }
+
+    /// The pins that match what [`populated`] already holds.
+    fn pinned_as_cached() -> Vec<PinnedMod> {
+        pinned(&[("AANobbMI", "v1"), ("gvQqBUqZ", "v1")], &[(
+            238_222, "5101366",
+        )])
+    }
+
+    /// Diff lists come out in `HashMap` order, so sort before comparing.
+    fn ids(entries: &[DiffEntry]) -> Vec<&str> {
+        let mut ids: Vec<&str> = entries.iter().map(|entry| entry.id.as_str()).collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// A pack that matches its cache reports every mod as unchanged and
+    /// nothing else.
+    #[test]
+    fn a_matching_pack_is_entirely_unchanged() {
+        let cache = populated();
+
+        let diff = cache.diff_against(pinned_as_cached());
+
+        assert_eq!(diff.unchanged, 3);
+        assert_eq!(ids(&diff.added), EMPTY_IDS);
+        assert_eq!(ids(&diff.removed), EMPTY_IDS);
+        assert!(diff.changed.is_empty());
+        assert!(diff.is_empty(), "nothing to do means an empty diff");
+    }
+
+    #[test]
+    fn an_empty_cache_makes_every_pin_an_addition() {
+        let cache = empty_at(PathBuf::from("never-written.json"));
+
+        let diff = cache.diff_against(pinned(&[("AANobbMI", "v1")], &[(238_222, "5101366")]));
+
+        assert_eq!(diff.unchanged, 0);
+        assert_eq!(ids(&diff.added), ["238222", "AANobbMI"]);
+        assert_eq!(ids(&diff.removed), EMPTY_IDS);
+    }
+
+    /// A pin that moved since the cache was written is reported while the
+    /// cache still holds the old id.
+    #[test]
+    fn a_moved_pin_is_reported_as_changed() {
+        let cache = populated();
+
+        // Only Sodium moves; the other two stay where the cache has them.
+        let moved = pinned(&[("AANobbMI", "v2"), ("gvQqBUqZ", "v1")], &[(
+            238_222, "5101366",
+        )]);
+        let diff = cache.diff_against(moved);
+
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(diff.changed[0].id, "AANobbMI");
+        assert_eq!(diff.changed[0].from, "v1");
+        assert_eq!(diff.changed[0].to, "v2");
+        // Counted apart from the mods that did not move.
+        assert_eq!(diff.unchanged, 2);
+        assert_eq!(ids(&diff.added), EMPTY_IDS);
+    }
+
+    /// Both sides of an update print as releases: the old one off the cache,
+    /// the new one off the pack.
+    #[test]
+    fn an_update_prints_releases_on_both_sides() {
+        let mut cache = empty_at(PathBuf::from("never-written.json"));
+        cache.set_mod(
+            modrinth_release("AANobbMI", "v1", "0.6.0"),
+            sample_mod("AANobbMI", "Sodium"),
+        );
+
+        let diff = cache.diff_against(vec![PinnedMod {
+            id: CacheId::from(modrinth_release("AANobbMI", "v2", "0.6.5")),
+            name: "Sodium".to_owned(),
+            source: Source::Modrinth,
+        }]);
+
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(diff.changed[0].from, "0.6.0");
+        assert_eq!(diff.changed[0].to, "0.6.5");
+    }
+
+    /// An entry with no stored release falls back to its pinned id.
+    #[test]
+    fn an_unknown_release_falls_back_to_the_pinned_id() {
+        let mut cache = empty_at(PathBuf::from("never-written.json"));
+        // `modrinth` leaves the release unset, as a pre-v4 entry would.
+        cache.set_mod(modrinth("AANobbMI", "v1"), sample_mod("AANobbMI", "Sodium"));
+
+        let diff = cache.diff_against(vec![PinnedMod {
+            id: CacheId::from(modrinth_release("AANobbMI", "v2", "0.6.5")),
+            name: "Sodium".to_owned(),
+            source: Source::Modrinth,
+        }]);
+
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(diff.changed[0].from, "v1", "the pin id stands in");
+        assert_eq!(
+            diff.changed[0].to, "0.6.5",
+            "the new side is still a release"
+        );
+    }
+
+    /// A `CurseForge` pin resolves the same way, off its file id.
+    #[test]
+    fn a_curseforge_update_prints_releases_too() {
+        let mut cache = empty_at(PathBuf::from("never-written.json"));
+        cache.set_mod(
+            curseforge_release(238_222, "5101366", "19.21.0"),
+            sample_mod("238222", "JEI"),
+        );
+
+        let diff = cache.diff_against(vec![PinnedMod {
+            id: CacheId::from(curseforge_release(238_222, "5209876", "19.21.1")),
+            name: "JEI".to_owned(),
+            source: Source::CurseForge,
+        }]);
+
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(diff.changed[0].from, "19.21.0");
+        assert_eq!(diff.changed[0].to, "19.21.1");
+    }
+
+    /// Cached but no longer pinned: reported before `App::close` prunes it.
+    #[test]
+    fn a_dropped_mod_is_reported_as_removed() {
+        let cache = populated();
+
+        let diff = cache.diff_against(pinned(&[("AANobbMI", "v1")], &[]));
+
+        assert_eq!(ids(&diff.removed), ["238222", "gvQqBUqZ"]);
+        assert_eq!(diff.unchanged, 1);
+        assert!(diff.changed.is_empty());
+    }
+
+    /// A removal is not counted as unchanged just because the cache holds it.
+    #[test]
+    fn removals_do_not_inflate_the_unchanged_count() {
+        let cache = populated();
+
+        let diff = cache.diff_against(pinned(&[("P7dR8mSH", "v1")], &[]));
+
+        assert_eq!(diff.unchanged, 0);
+        assert_eq!(ids(&diff.added), ["P7dR8mSH"]);
+        assert_eq!(ids(&diff.removed), ["238222", "AANobbMI", "gvQqBUqZ"]);
+        // Only what the pack still pins.
+        assert_eq!(diff.total(), 1);
+    }
+
+    /// Comparing never writes.
+    #[test]
+    fn comparing_leaves_the_cache_clean() {
+        let mut cache = populated();
+        cache.is_dirty = false;
+
+        let _ = cache.diff_against(pinned(&[("AANobbMI", "v2")], &[]));
+
+        assert!(!cache.is_dirty, "comparing should not dirty the cache");
+        assert_eq!(sorted_ids(&cache).len(), 3, "nothing should be dropped");
+    }
+
+    /// A pinned mod is named and sourced by the pack.
+    #[test]
+    fn a_pinned_mod_is_named_and_sourced_by_the_pack() {
+        let cache = empty_at(PathBuf::from("never-written.json"));
+
+        let diff = cache.diff_against(pinned(&[("AANobbMI", "v1")], &[(238_222, "5101366")]));
+
+        let modrinth_entry = diff
+            .added
+            .iter()
+            .find(|entry| entry.id == "AANobbMI")
+            .expect("the Modrinth pin is added");
+        assert_eq!(modrinth_entry.name, "AANobbMI-name");
+        assert_eq!(modrinth_entry.source, Source::Modrinth);
+
+        let curseforge_entry = diff
+            .added
+            .iter()
+            .find(|entry| entry.id == "238222")
+            .expect("the CurseForge pin is added");
+        assert_eq!(curseforge_entry.name, "238222-name");
+        assert_eq!(curseforge_entry.source, Source::CurseForge);
+    }
+
+    /// A removal is named and sourced by the cache.
+    #[test]
+    fn a_removed_mod_is_named_and_sourced_by_the_cache() {
+        let cache = populated();
+
+        let diff = cache.diff_against(pinned(&[("AANobbMI", "v1")], &[]));
+
+        let lithium = diff
+            .removed
+            .iter()
+            .find(|entry| entry.id == "gvQqBUqZ")
+            .expect("Lithium is removed");
+        assert_eq!(lithium.name, "Lithium", "the cached title, not the pack's");
+        assert_eq!(lithium.source, Source::Modrinth);
+
+        // Read off the CurseForge url the cached entry carries.
+        let jei = diff
+            .removed
+            .iter()
+            .find(|entry| entry.id == "238222")
+            .expect("JEI is removed");
+        assert_eq!(jei.name, "JEI");
+        assert_eq!(jei.source, Source::CurseForge);
     }
 }
 
@@ -349,7 +590,12 @@ mod save {
     fn the_on_disk_shape_is_pinned() {
         let dir = TempDir::new("cache-save-shape");
         let mut cache = empty_at(dir.cache_file());
-        cache.set_mod(modrinth("AANobbMI", "v1"), sample_mod("AANobbMI", "Sodium"));
+        // A pin that names its release, so the snapshot covers a populated
+        // `version_name`.
+        cache.set_mod(
+            modrinth_release("AANobbMI", "v1", "0.6.5"),
+            sample_mod("AANobbMI", "Sodium"),
+        );
 
         cache.save().expect("save a dirty cache");
 

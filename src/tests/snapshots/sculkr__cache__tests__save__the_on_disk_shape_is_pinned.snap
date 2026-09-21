@@ -25,8 +25,9 @@ expression: pretty
       "slug": "sodium",
       "source_url": "https://github.com/someone/AANobbMI",
       "title": "Sodium",
+      "version_name": "0.6.5",
       "wiki_url": null
     }
   },
-  "version": 3
+  "version": 4
 }

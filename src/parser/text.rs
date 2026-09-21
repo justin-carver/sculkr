@@ -67,11 +67,14 @@ impl TextParser {
                 ParsedLine::Modrinth(id, version_id) => modrinth_mods.push(ParsedModrinthId {
                     id,
                     cache_id: version_id,
+                    // A text list names no release.
+                    version_name: None,
                 }),
                 ParsedLine::CurseForge(id, version_id) => {
                     curseforge_mods.push(ParsedCurseForgeId {
                         id,
                         cache_id: version_id,
+                        version_name: None,
                     });
                 }
             }

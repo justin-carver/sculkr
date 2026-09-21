@@ -33,7 +33,8 @@ pub type CacheData = HashMap<String, CacheMod>;
 ///
 /// 2: Modrinth authors, which entries written before then left empty.
 /// 3: `snake_case` field names throughout, where [`Mod`] was camelCase.
-pub const CACHE_VERSION: u32 = 3;
+/// 4: `version_name`, the release an entry is pinned to.
+pub const CACHE_VERSION: u32 = 4;
 /// The on-disk shape. Generic over the map so writing can borrow it and
 /// reading can own it, without a second struct or a clone of the whole cache.
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -45,14 +46,20 @@ struct CacheFile<ModRef> {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CacheMod {
     pub cache_id: String,
+    /// The release `cache_id` pins. `None` when the pack did not name one.
+    #[serde(default)]
+    pub version_name: Option<String>,
     #[serde(flatten)]
     pub data: Mod,
 }
 
+#[allow(clippy::struct_field_names)]
 #[derive(Debug, Clone)]
 pub struct CacheId {
     cache_id: String,
     mod_id: String,
+    /// The release `cache_id` pins.
+    version_name: Option<String>,
 }
 
 impl From<crate::parser::ParsedModrinthId> for CacheId {
@@ -60,6 +67,7 @@ impl From<crate::parser::ParsedModrinthId> for CacheId {
         Self {
             cache_id: id.cache_id,
             mod_id: id.id,
+            version_name: id.version_name,
         }
     }
 }
@@ -69,31 +77,101 @@ impl From<crate::parser::ParsedCurseForgeId> for CacheId {
         Self {
             cache_id: id.cache_id,
             mod_id: id.id.to_string(),
+            version_name: id.version_name,
         }
     }
+}
+
+/// Which service a mod comes from.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Source {
+    Modrinth,
+    CurseForge,
+}
+
+impl Source {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Modrinth => "modrinth",
+            Self::CurseForge => "curseforge",
+        }
+    }
+
+    /// Reads the source off a cached entry's project url, falling back to the
+    /// shape of `mod_id` for a url that names neither service.
+    fn infer(mod_id: &str, data: &Mod) -> Self {
+        if data.mod_url.contains("modrinth.com") {
+            Self::Modrinth
+        } else if data.mod_url.contains("curseforge.com") || mod_id.parse::<i32>().is_ok() {
+            Self::CurseForge
+        } else {
+            Self::Modrinth
+        }
+    }
+}
+
+/// A mod as the pack pins it: the cache key, the pack's name for it, and its
+/// source.
+#[derive(Debug, Clone)]
+pub struct PinnedMod {
+    pub id: CacheId,
+    pub name: String,
+    pub source: Source,
+}
+
+/// One side of an update, ready to print: the release, or the pinned id when
+/// no release is known.
+fn version_label(version_name: Option<&str>, cache_id: &str) -> String {
+    version_name.unwrap_or(cache_id).to_owned()
+}
+
+/// One mod in a diff, carrying enough to print its row without another lookup.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DiffEntry {
+    pub id: String,
+    pub name: String,
+    pub source: Source,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct VersionChange {
     pub id: String,
+    pub name: String,
+    pub source: Source,
+    /// Already resolved by [`version_label`].
     pub from: String,
     pub to: String,
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct CacheDiff {
-    pub added: Vec<String>,
-    pub removed: Vec<String>,
+    pub added: Vec<DiffEntry>,
+    pub removed: Vec<DiffEntry>,
     pub changed: Vec<VersionChange>, // mod version change
     pub unchanged: usize,
 }
 
-#[derive(Debug, Clone)]
+impl CacheDiff {
+    /// Whether the cache matches the pack.
+    pub const fn is_empty(&self) -> bool {
+        self.added.is_empty() && self.removed.is_empty() && self.changed.is_empty()
+    }
+
+    /// Counts what the pack currently pins, which excludes removals.
+    pub const fn total(&self) -> usize {
+        self.unchanged
+            .saturating_add(self.added.len())
+            .saturating_add(self.changed.len())
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct Cache {
-    file: PathBuf,
-    is_dirty: bool,
-    data: CacheData,
-    diff: CacheDiff,
+    pub file: PathBuf,
+    pub is_dirty: bool,
+    pub data: CacheData,
+    pub diff: CacheDiff,
 }
 
 impl Cache {
@@ -241,7 +319,11 @@ impl Cache {
         self.diff.removed.extend(
             self.data
                 .extract_if(|mod_id, _| !keep.contains(mod_id))
-                .map(|(mod_id, _)| mod_id),
+                .map(|(mod_id, entry)| DiffEntry {
+                    name: entry.data.title.clone(),
+                    source: Source::infer(&mod_id, &entry.data),
+                    id: mod_id,
+                }),
         );
 
         let removed = self.diff.removed.len().saturating_sub(before);
@@ -259,9 +341,14 @@ impl Cache {
     {
         let id = id.into();
 
+        // Read before `data` moves into the entry below.
+        let name = data.title.clone();
+        let source = Source::infer(&id.mod_id, &data);
+
         self.is_dirty = true;
         let prev_mod = self.data.insert(id.mod_id.clone(), CacheMod {
             cache_id: id.cache_id.clone(),
+            version_name: id.version_name.clone(),
             data,
         });
 
@@ -269,13 +356,19 @@ impl Cache {
             // The version of the mod has changed, so lets update the `CacheDiff`.
             Some(pm) if id.cache_id != pm.cache_id => self.diff.changed.push(VersionChange {
                 id: id.mod_id,
-                from: pm.cache_id,
-                to: id.cache_id,
+                name,
+                source,
+                from: version_label(pm.version_name.as_deref(), &pm.cache_id),
+                to: version_label(id.version_name.as_deref(), &id.cache_id),
             }),
             // This is the exact same mod, do not update the diff
             Some(_) => (),
             // This is a brand new mod being added to the cache
-            None => self.diff.added.push(id.mod_id),
+            None => self.diff.added.push(DiffEntry {
+                id: id.mod_id,
+                name,
+                source,
+            }),
         }
     }
 
@@ -293,9 +386,77 @@ impl Cache {
         }
     }
 
+    /// Compares `pinned` against the cache without fetching anything.
+    ///
+    /// A pin the cache does not hold is `added`, one it holds under another id
+    /// is `changed`, and an entry `pinned` never names is `removed`.
+    pub fn diff_against<I>(&self, pinned: I) -> CacheDiff
+    where
+        I: IntoIterator<Item = PinnedMod>,
+    {
+        let mut diff = CacheDiff::default();
+        let mut seen = HashSet::<String>::with_capacity(self.data.len());
+
+        for pin in pinned {
+            let PinnedMod {
+                id:
+                    CacheId {
+                        cache_id,
+                        mod_id,
+                        version_name,
+                    },
+                name,
+                source,
+            } = pin;
+
+            match self.data.get(&mod_id) {
+                Some(entry) if entry.cache_id != cache_id => diff.changed.push(VersionChange {
+                    id: mod_id.clone(),
+                    name,
+                    source,
+                    from: version_label(entry.version_name.as_deref(), &entry.cache_id),
+                    to: version_label(version_name.as_deref(), &cache_id),
+                }),
+                Some(_) => diff.unchanged = diff.unchanged.saturating_add(1),
+                None => diff.added.push(DiffEntry {
+                    id: mod_id.clone(),
+                    name,
+                    source,
+                }),
+            }
+
+            seen.insert(mod_id);
+        }
+
+        // Still cached, no longer pinned. `App::close` prunes these on the
+        // next run; the name and source come off the cached entry.
+        diff.removed.extend(
+            self.data
+                .iter()
+                .filter(|(mod_id, _)| !seen.contains(*mod_id))
+                .map(|(mod_id, entry)| DiffEntry {
+                    id: mod_id.clone(),
+                    name: entry.data.title.clone(),
+                    source: Source::infer(mod_id, &entry.data),
+                }),
+        );
+
+        diff
+    }
+
+    /// The diff accumulated over this run.
+    ///
+    /// `unchanged` is whatever [`Self::data`] holds that was neither `added`
+    /// nor `changed`.
     pub fn get_diff(self) -> CacheDiff {
+        let touched = self
+            .diff
+            .added
+            .len()
+            .saturating_add(self.diff.changed.len());
+
         CacheDiff {
-            unchanged: 20,
+            unchanged: self.data.len().saturating_sub(touched),
             ..self.diff
         }
     }

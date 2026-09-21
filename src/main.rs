@@ -6,7 +6,7 @@ use clap::{ColorChoice, CommandFactory, FromArgMatches, Parser, builder::Styles}
 
 use crate::{
     app::App,
-    args::{Cli, Command},
+    args::{Cli, Command, Runtime},
     cache::Cache,
     error::Error,
     format::Formatter,
@@ -84,7 +84,11 @@ fn run(cli: &Cli, loaded: &config::Loaded, pack_root: &PathBuf) -> Result<(), Er
         .and_then(|pack| pack.index.as_ref())
         .map(|index| index.file.as_str());
 
-    let pw_parser = PackwizParser::load_from(pack_root, index_file)?;
+    let minecraft = pack
+        .as_ref()
+        .and_then(|pack| pack.versions.minecraft.as_deref());
+
+    let pw_parser = PackwizParser::load_from(pack_root, index_file, minecraft)?;
     let packwiz_mods = pw_parser.mods.clone();
 
     // Resolved here rather than at the request, so the environment-over-file
@@ -153,6 +157,11 @@ fn main() {
     let result: anyhow::Result<()> = match cli.command {
         Some(Command::Config) => args::config(&mut std::io::stdout().lock(), &cli, &loaded),
         Some(Command::About) => args::about(&mut std::io::stdout().lock()),
+        Some(Command::Diff) => args::diff(
+            &mut std::io::stdout().lock(),
+            &Runtime::gather(&cli, &loaded),
+        ),
+
         None => run(&cli, &loaded, &pack_root).map_err(anyhow::Error::from),
     };
 

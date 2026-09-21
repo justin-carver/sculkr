@@ -79,11 +79,21 @@ pub fn sample_mod(id: &str, title: &str) -> Mod {
     }
 }
 
-/// A Modrinth mod as the parser hands it over, pinned to `version`.
+/// A Modrinth mod as the parser hands it over, pinned to `version` and naming
+/// no release. See [`modrinth_release`].
 pub fn modrinth(id: &str, version: &str) -> ParsedModrinthId {
     ParsedModrinthId {
         cache_id: version.into(),
         id: id.into(),
+        version_name: None,
+    }
+}
+
+/// [`modrinth`], pinned to `version` and naming the release it resolves to.
+pub fn modrinth_release(id: &str, version: &str, release: &str) -> ParsedModrinthId {
+    ParsedModrinthId {
+        version_name: Some(release.into()),
+        ..modrinth(id, version)
     }
 }
 
@@ -92,5 +102,14 @@ pub fn curseforge(id: i32, file_id: &str) -> ParsedCurseForgeId {
     ParsedCurseForgeId {
         cache_id: file_id.into(),
         id,
+        version_name: None,
+    }
+}
+
+/// [`curseforge`], pinned to `file_id` and naming the release it resolves to.
+pub fn curseforge_release(id: i32, file_id: &str, release: &str) -> ParsedCurseForgeId {
+    ParsedCurseForgeId {
+        version_name: Some(release.into()),
+        ..curseforge(id, file_id)
     }
 }

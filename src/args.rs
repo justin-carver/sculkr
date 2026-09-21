@@ -10,7 +10,7 @@ use clap::{
 use colored::Colorize;
 use serde_with::SerializeDisplay;
 
-use crate::format::SortKey;
+use crate::{cache, cache::Cache, format::SortKey};
 
 /// Built from the placeholder table so `--help` can never drift from what the
 /// formatter actually accepts.
@@ -193,6 +193,8 @@ pub enum Command {
     About,
     /// Print the sculkr configuration to stdout
     Config,
+    /// Output the diff(erence) between the last cache modpack data state, and the current
+    Diff,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -251,7 +253,10 @@ fn write_fancy_divider(out: &mut dyn std::io::Write, title: &str) -> anyhow::Res
 /// Every field that can fail holds that failure instead of returning it. A
 /// missing key or an unreadable pack directory is the most useful thing this
 /// command has to say, so it is a line in the output, not a reason to bail.
-struct Runtime {
+///
+/// Runtime can also be queried by other commands (such as `diff`) to get known
+/// state about the current cache, config, pack info before rendering.
+pub struct Runtime {
     pack_root: PathBuf,
     /// `.sculk` files that were read, in the order they were applied.
     config_sources: Vec<PathBuf>,
@@ -275,7 +280,7 @@ struct Runtime {
 
 #[allow(clippy::arithmetic_side_effects)]
 impl Runtime {
-    fn gather(cli: &Cli, loaded: &crate::config::Loaded) -> Self {
+    pub fn gather(cli: &Cli, loaded: &crate::config::Loaded) -> Self {
         // Reported as the pack root, so it has to be resolved the same way the
         // run resolves it: upward to wherever pack.toml is.
         let start = cli.path.clone().unwrap_or_else(|| PathBuf::from("."));
@@ -296,7 +301,7 @@ impl Runtime {
             .map(|cache| cache.get_data().len());
 
         Self {
-            mods: crate::parser::packwiz::PackwizParser::load_from(&pack_root, None)
+            mods: crate::parser::packwiz::PackwizParser::load_from(&pack_root, None, None)
                 .ok()
                 .map(|pack| (pack.modrinth_mods.len(), pack.curseforge_mods.len()))
                 // A directory we cannot read and one with nothing in it have the
@@ -437,6 +442,232 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
     }
 
     writeln!(out)?;
+    Ok(())
+}
+
+/// Prints what the next run would change, without fetching anything.
+///
+/// Compares the pack's pins against the cache, both read off disk.
+pub fn diff(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<()> {
+    let cache = Cache::load(&rt.cache)?;
+
+    // Resolved as `run` does it: pack.toml names the index, and a pack
+    // without one still parses.
+    let pack =
+        crate::parser::pack::Pack::read(rt.pack_root.join(crate::parser::pack::PACK_FILE_NAME))
+            .ok();
+    let index_file = pack
+        .as_ref()
+        .and_then(|pack| pack.index.as_ref())
+        .map(|index| index.file.as_str());
+
+    let minecraft = pack
+        .as_ref()
+        .and_then(|pack| pack.versions.minecraft.as_deref());
+
+    let parsed =
+        crate::parser::packwiz::PackwizParser::load_from(&rt.pack_root, index_file, minecraft)?;
+    let diff = cache.diff_against(pinned_mods(&parsed.mods, minecraft));
+
+    log::debug!("diff against the pack: {diff:?}");
+
+    render_diff(out, &diff)
+}
+
+/// Every mod the pack pins, as [`Cache::diff_against`] takes them.
+///
+/// A record naming both services pins on both.
+fn pinned_mods(
+    mods: &[crate::parser::packwiz::PackwizMod],
+    minecraft: Option<&str>,
+) -> Vec<cache::PinnedMod> {
+    let mut pinned = Vec::with_capacity(mods.len());
+
+    for record in mods {
+        let version_name = crate::parser::packwiz::release_version(&record.filename, minecraft);
+
+        if let Some(update) = record.update.modrinth.as_ref() {
+            pinned.push(cache::PinnedMod {
+                id: crate::parser::ParsedModrinthId {
+                    cache_id: update.version.clone(),
+                    id: update.mod_id.clone(),
+                    version_name: version_name.clone(),
+                }
+                .into(),
+                name: record.name.clone(),
+                source: cache::Source::Modrinth,
+            });
+        }
+
+        if let Some(update) = record.update.curseforge.as_ref() {
+            pinned.push(cache::PinnedMod {
+                id: crate::parser::ParsedCurseForgeId {
+                    cache_id: update.file_id.to_string(),
+                    id: update.project_id,
+                    // Moves: last use in this iteration.
+                    version_name,
+                }
+                .into(),
+                name: record.name.clone(),
+                source: cache::Source::CurseForge,
+            });
+        }
+    }
+
+    pinned
+}
+
+/// Column width for a list of mod names, clamped to 16..=40 characters.
+fn name_width<'a, I>(names: I) -> usize
+where
+    I: Iterator<Item = &'a str>,
+{
+    names
+        .map(|name| name.chars().count())
+        .max()
+        .unwrap_or(0)
+        .clamp(16, 40)
+}
+
+/// Cuts `name` to `width` characters, ending it with an ellipsis.
+fn fit(name: &str, width: usize) -> String {
+    if name.chars().count() <= width {
+        return name.to_owned();
+    }
+
+    // One character of the budget goes to the ellipsis itself.
+    name.chars()
+        .take(width.saturating_sub(1))
+        .chain(std::iter::once('\u{2026}'))
+        .collect()
+}
+
+/// Writes one `name  <trailing>` row, indented under its section heading.
+///
+/// Pad the name before coloring it, and pass `trailing` as a `ColoredString`
+/// rather than a `&str`: both lose their escapes the other way round.
+fn write_diff_row<T>(
+    out: &mut dyn std::io::Write,
+    name: &str,
+    width: usize,
+    trailing: T,
+) -> anyhow::Result<()>
+where
+    T: std::fmt::Display,
+{
+    writeln!(
+        out,
+        "      {}  {trailing}",
+        format!("{:<width$}", fit(name, width)).bold()
+    )?;
+    Ok(())
+}
+
+/// Split from [`diff`] so the layout can be tested without a pack or a cache.
+#[allow(clippy::arithmetic_side_effects)]
+fn render_diff(out: &mut dyn std::io::Write, diff: &cache::CacheDiff) -> anyhow::Result<()> {
+    write_fancy_header(out, "Changes since the last cached state")?;
+
+    if !diff.added.is_empty() {
+        writeln!(out, "  {} ({})", "+ Added".green().bold(), diff.added.len())?;
+
+        let width = name_width(diff.added.iter().map(|entry| entry.name.as_str()));
+        for entry in &diff.added {
+            write_diff_row(out, &entry.name, width, entry.source.label().dimmed())?;
+        }
+        writeln!(out)?;
+    }
+
+    if !diff.removed.is_empty() {
+        writeln!(
+            out,
+            "  {} ({})",
+            "- Removed".red().bold(),
+            diff.removed.len()
+        )?;
+
+        let width = name_width(diff.removed.iter().map(|entry| entry.name.as_str()));
+        for entry in &diff.removed {
+            write_diff_row(out, &entry.name, width, entry.source.label().dimmed())?;
+        }
+        writeln!(out)?;
+    }
+
+    if !diff.changed.is_empty() {
+        writeln!(
+            out,
+            "  {} ({})",
+            "~ Updated".yellow().bold(),
+            diff.changed.len()
+        )?;
+
+        let width = name_width(diff.changed.iter().map(|change| change.name.as_str()));
+        // Padded so the arrows line up whatever the versions measure.
+        let from_width = diff
+            .changed
+            .iter()
+            .map(|change| change.from.chars().count())
+            .max()
+            .unwrap_or(0);
+
+        for change in &diff.changed {
+            let versions = format!(
+                "{} {} {}",
+                format!("{:<from_width$}", change.from).dimmed(),
+                "->".dimmed(),
+                change.to.yellow()
+            );
+            write_diff_row(out, &change.name, width, versions)?;
+        }
+        writeln!(out)?;
+    }
+
+    writeln!(
+        out,
+        "  {}",
+        format!("{} mods, {} unchanged", diff.total(), diff.unchanged).dimmed()
+    )?;
+
+    writeln!(out)?;
+    write_diff_hint(out, diff)?;
+    writeln!(out)?;
+
+    Ok(())
+}
+
+/// Writes the line under the counts naming what to run.
+#[allow(clippy::arithmetic_side_effects)]
+fn write_diff_hint(out: &mut dyn std::io::Write, diff: &cache::CacheDiff) -> anyhow::Result<()> {
+    if diff.is_empty() {
+        writeln!(
+            out,
+            "  {}",
+            "The cache already matches the pack; nothing to do.".green()
+        )?;
+        return Ok(());
+    }
+
+    // Only the work that applies.
+    let mut work = Vec::<String>::with_capacity(3);
+
+    if !diff.added.is_empty() {
+        work.push(format!("fetch {}", diff.added.len()));
+    }
+    if !diff.changed.is_empty() {
+        work.push(format!("update {}", diff.changed.len()));
+    }
+    if !diff.removed.is_empty() {
+        work.push(format!("drop {}", diff.removed.len()));
+    }
+
+    writeln!(
+        out,
+        "  {} {} {}",
+        "Run".dimmed(),
+        "sculkr".cyan().bold(),
+        format!("to merge these into the cache ({}).", work.join(", ")).dimmed()
+    )?;
+
     Ok(())
 }
 
@@ -584,7 +815,7 @@ output = "modlist.md"
         #[allow(dead_code)]
         fn subcommands_are_exhaustive(c: &Command) {
             match c {
-                Command::About | Command::Config => {}
+                Command::About | Command::Config | Command::Diff => {}
             }
         }
 
@@ -598,6 +829,7 @@ output = "modlist.md"
             let expected: BTreeSet<String> = [
                 "about",
                 "config",
+                "diff",
                 "--verbose",
                 "--quiet",
                 "--path",
@@ -664,6 +896,87 @@ output = "modlist.md"
                 (r"\x1b\[[0-9;]*m", ""),
                 (r"\d+\.\d+\.\d+", "[VERSION]"),
             ]}, {
+                insta::assert_snapshot!(rendered);
+            });
+            Ok(())
+        }
+
+        /// [`fit`]: cutting an overlong name to the column.
+        #[test]
+        fn a_name_is_cut_to_the_column_with_an_ellipsis() {
+            // Short enough to sit in the column untouched.
+            assert_eq!(fit("Sodium", 16), "Sodium");
+            // Exactly the column width is still untouched.
+            assert_eq!(fit("Distant Horizons", 16), "Distant Horizons");
+
+            let cut = fit("Ridiculously Long Mod Name", 16);
+            assert_eq!(cut.chars().count(), 16, "a cut name still fills the column");
+            assert!(cut.ends_with('\u{2026}'));
+
+            // Cut on a character boundary, not mid-codepoint.
+            let unicode = fit("\u{9271}\u{9271}\u{9271}\u{9271}\u{9271}", 3);
+            assert_eq!(unicode, "\u{9271}\u{9271}\u{2026}");
+        }
+
+        /// `render_diff` takes a `CacheDiff` directly, so the layout is
+        /// pinned without a pack or a cache.
+        fn render_the_diff(diff: &cache::CacheDiff) -> anyhow::Result<String> {
+            let mut buf = Vec::new();
+            render_diff(&mut buf, diff)?;
+            Ok(String::from_utf8(buf)?)
+        }
+
+        fn entry(id: &str, name: &str, source: cache::Source) -> cache::DiffEntry {
+            cache::DiffEntry {
+                id: id.to_owned(),
+                name: name.to_owned(),
+                source,
+            }
+        }
+
+        /// `from`/`to` arrive resolved: a release, or the pinned id.
+        fn change(id: &str, name: &str, from: &str, to: &str) -> cache::VersionChange {
+            cache::VersionChange {
+                id: id.to_owned(),
+                name: name.to_owned(),
+                source: cache::Source::Modrinth,
+                from: from.to_owned(),
+                to: to.to_owned(),
+            }
+        }
+
+        /// A cache that matches the pack says so.
+        #[test]
+        fn diff_reports_a_cache_that_matches_the_pack() -> anyhow::Result<()> {
+            let rendered = render_the_diff(&cache::CacheDiff {
+                unchanged: 20,
+                ..cache::CacheDiff::default()
+            })?;
+
+            insta::with_settings!({filters => vec![(r"\x1b\[[0-9;]*m", "")]}, {
+                insta::assert_snapshot!(rendered);
+            });
+            Ok(())
+        }
+
+        #[test]
+        fn diff_reports_every_kind_of_change() -> anyhow::Result<()> {
+            let rendered = render_the_diff(&cache::CacheDiff {
+                added: vec![
+                    entry("YL57xq9U", "Iris Shaders", cache::Source::Modrinth),
+                    entry("508933", "Distant Horizons", cache::Source::CurseForge),
+                ],
+                removed: vec![entry("Bh37bMuy", "OptiFabric", cache::Source::Modrinth)],
+                changed: vec![
+                    change("AANobbMI", "Sodium", "0.6.0", "0.6.5"),
+                    change("gvQqBUqZ", "Lithium", "0.14.0", "0.14.3"),
+                    // No release on the old side, as a pre-v4 entry has.
+                    change("u6dRKJwZ", "JEI", "5101366", "19.21.1"),
+                ],
+                unchanged: 41,
+            })?;
+
+            insta::with_settings!({filters => vec![(r"\x1b\[[0-9;]*m", "")]}, {
                 insta::assert_snapshot!(rendered);
             });
             Ok(())
