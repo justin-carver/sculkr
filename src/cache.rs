@@ -448,7 +448,7 @@ impl Cache {
     ///
     /// `unchanged` is whatever [`Self::data`] holds that was neither `added`
     /// nor `changed`.
-    pub fn get_diff(self) -> CacheDiff {
+    pub fn get_diff(&self) -> CacheDiff {
         let touched = self
             .diff
             .added
@@ -457,7 +457,7 @@ impl Cache {
 
         CacheDiff {
             unchanged: self.data.len().saturating_sub(touched),
-            ..self.diff
+            ..self.diff.clone()
         }
     }
 

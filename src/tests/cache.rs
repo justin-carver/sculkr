@@ -381,6 +381,77 @@ mod diff_against {
     }
 }
 
+/// [`Cache::get_diff`]: what a run did, reported once it is over.
+mod get_diff {
+    use super::*;
+
+    fn keep(ids: &[&str]) -> HashSet<String> {
+        ids.iter().map(|&id| id.to_owned()).collect()
+    }
+
+    fn ids(entries: &[DiffEntry]) -> Vec<&str> {
+        let mut ids: Vec<&str> = entries.iter().map(|entry| entry.id.as_str()).collect();
+        ids.sort_unstable();
+        ids
+    }
+
+    /// [`populated`] fills itself through `set_mod`, which counts every entry
+    /// as fetched. Clearing the diff leaves what a load from disk produces.
+    fn as_loaded(mut cache: Cache) -> Cache {
+        cache.diff = CacheDiff::default();
+        cache
+    }
+
+    /// A run that fetched nothing reports every entry as unchanged.
+    #[test]
+    fn a_fully_cached_run_is_entirely_unchanged() {
+        let diff = as_loaded(populated()).get_diff();
+
+        assert_eq!(diff.unchanged, 3);
+        assert!(diff.is_empty());
+    }
+
+    /// A run against an empty cache fetched all of it, so none of it is a hit.
+    #[test]
+    fn a_first_run_reports_everything_as_added() {
+        let diff = populated().get_diff();
+
+        assert_eq!(ids(&diff.added), ["238222", "AANobbMI", "gvQqBUqZ"]);
+        assert_eq!(diff.unchanged, 0);
+    }
+
+    /// Fetches and prunes are counted apart from the entries left alone.
+    #[test]
+    fn fetches_and_prunes_are_counted_apart_from_hits() {
+        let mut cache = as_loaded(populated());
+
+        cache.set_mod(
+            modrinth("P7dR8mSH", "v1"),
+            sample_mod("P7dR8mSH", "Fabric API"),
+        );
+        cache.set_mod(modrinth("AANobbMI", "v2"), sample_mod("AANobbMI", "Sodium"));
+        cache.retain_only(&keep(&["AANobbMI", "P7dR8mSH", "238222"]));
+
+        let diff = cache.get_diff();
+
+        assert_eq!(ids(&diff.added), ["P7dR8mSH"]);
+        assert_eq!(diff.changed.len(), 1);
+        assert_eq!(diff.changed[0].id, "AANobbMI");
+        assert_eq!(ids(&diff.removed), ["gvQqBUqZ"]);
+        // Three entries left, less the one added and the one updated.
+        assert_eq!(diff.unchanged, 1);
+    }
+
+    /// Reporting borrows, so `App::close` can save the cache and then read it.
+    #[test]
+    fn reporting_leaves_the_cache_readable() {
+        let cache = as_loaded(populated());
+
+        assert_eq!(cache.get_diff().unchanged, 3);
+        assert_eq!(cache.get_diff().unchanged, 3);
+    }
+}
+
 /// [`Cache::retain_only`]: dropping entries for mods that have left the pack.
 mod prune {
     use super::*;

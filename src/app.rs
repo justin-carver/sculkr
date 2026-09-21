@@ -11,7 +11,7 @@ use colored::Colorize;
 use crate::{
     Cache, Error, Mod,
     args::Cli,
-    cache::CacheId,
+    cache::{CacheDiff, CacheId},
     config::Config,
     env::Secret,
     format::{Formatter, SortKey},
@@ -285,7 +285,53 @@ impl App {
             log::debug!("pruned {pruned} cached mod(s) no longer in the pack");
         }
 
-        cache.save()
+        cache.save()?;
+        report_cache(&cache.get_diff());
+
+        Ok(())
+    }
+}
+
+/// Logs what the run changed in the cache.
+///
+/// Goes to the log for the same reason [`Destination::report`] does: stdout may
+/// be carrying a modlist.
+fn report_cache(diff: &CacheDiff) {
+    if diff.is_empty() {
+        log::debug!(
+            "cache already matched the pack, {} mod(s) unchanged",
+            diff.unchanged
+        );
+
+        return;
+    }
+
+    let mut counts = Vec::<String>::with_capacity(3);
+
+    if !diff.added.is_empty() {
+        counts.push(format!("{} added", diff.added.len()));
+    }
+    if !diff.changed.is_empty() {
+        counts.push(format!("{} updated", diff.changed.len()));
+    }
+    if !diff.removed.is_empty() {
+        counts.push(format!("{} removed", diff.removed.len()));
+    }
+
+    log::info!(
+        "cache updated: {} ({} unchanged)",
+        counts.join(", "),
+        diff.unchanged
+    );
+
+    for entry in &diff.added {
+        log::debug!("  + {} ({})", entry.name, entry.source.label());
+    }
+    for change in &diff.changed {
+        log::debug!("  ~ {} {} -> {}", change.name, change.from, change.to);
+    }
+    for entry in &diff.removed {
+        log::debug!("  - {} ({})", entry.name, entry.source.label());
     }
 }
 
