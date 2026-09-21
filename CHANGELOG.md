@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <!-- next-header -->
 
+## [1.0.1] - 2026-09-21
+
+### Added
+
+- Read a mod's release from its jar filename
+- Report pack changes against the cached state
+
+### Changed
+
+- Add diff context and scaffolding to cache architecture
+
 ## [1.0.0] - 2026-09-13
 
 ### Added
@@ -152,7 +163,8 @@ _Maintenance release. No user-facing changes; see the commit log for build, CI a
 ## [0.1.1] - 2026-09-08
 
 <!-- next-url -->
-[Unreleased]: https://github.com/justin-carver/sculkr/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/justin-carver/sculkr/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/justin-carver/sculkr/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/justin-carver/sculkr/compare/v0.2.4...v1.0.0
 [0.2.4]: https://github.com/justin-carver/sculkr/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/justin-carver/sculkr/compare/v0.2.2...v0.2.3
