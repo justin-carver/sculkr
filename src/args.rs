@@ -60,22 +60,22 @@ const HELP_STYLES: Styles = Styles::styled()
 )]
 pub struct Cli {
     /// Increase logging verbosity (-v, -vv, -vvv)
-    #[clap(short, long, action = ArgAction::Count, global = true)]
+    #[arg(short, long, action = ArgAction::Count, global = true)]
     pub(crate) verbose: u8,
 
     /// Suppress all non-error output
-    #[clap(short, long, global = true)]
+    #[arg(short, long, global = true)]
     pub(crate) quiet: bool,
 
     /// Set the default cache file
-    #[clap(long, global = true, value_name = "PATH")]
+    #[arg(long, global = true, value_name = "PATH")]
     pub(crate) cache: Option<String>,
 
     /// Sets the color mode [default: auto]
-    #[clap(short, long = "color-mode", value_enum, global = true)]
+    #[arg(short, long = "color-mode", value_enum, global = true)]
     pub(crate) color_mode: Option<ColorChoice>,
 
-    #[clap(
+    #[arg(
         short,
         long,
         global = true,
@@ -85,16 +85,16 @@ pub struct Cli {
     )]
     pub(crate) path: Option<PathBuf>,
 
-    #[clap(short, long, global = true, value_name = "PATH")]
+    #[arg(short, long, global = true, value_name = "PATH")]
     /// Sets a custom output path for the modlist [default: stdout]
     pub(crate) output: Option<PathBuf>,
 
     // TODO: Feels a little weird to have -f and -F, should these be changed?
-    #[clap(short = 'F', long, global = true)]
+    #[arg(short = 'F', long, global = true)]
     /// Forcibily overwrite a specified output file
     pub(crate) force: bool,
 
-    #[clap(long, global = true)]
+    #[arg(long, global = true)]
     /// Emit the whole pack as one JSON document instead of a formatted modlist
     pub(crate) json: bool,
 
@@ -105,7 +105,7 @@ pub struct Cli {
     /// than by the shell, so quote the template and write \n for a line break.
     // Left unset rather than defaulted, so a `.sculk` value can be told apart
     // from a flag the user actually passed. `format()` applies the default.
-    #[clap(
+    #[arg(
     long,
     short = 'f',
     allow_hyphen_values = true,
@@ -118,11 +118,11 @@ pub struct Cli {
     /// Takes any placeholder name from --format except INDEX, e.g. NAME, SLUG or
     /// AUTHORS. Numbers compare by value, so "Mod 2" sorts before "Mod 10", and
     /// mods with no value for the field are listed last.
-    #[clap(short, long, global = true, value_name = "FIELD", long_help = sort_by_long_help())]
+    #[arg(short, long, global = true, value_name = "FIELD", long_help = sort_by_long_help())]
     pub(crate) sort_by: Option<SortKey>,
 
     /// Reverses the sort, Z-A
-    #[clap(short, long, global = true)]
+    #[arg(short, long, global = true)]
     pub(crate) reverse: bool,
 
     #[command(subcommand)]
@@ -195,7 +195,15 @@ pub enum Command {
     /// Print the sculkr configuration to stdout
     Config,
     /// Output the diff(erence) between the last cache modpack data state, and the current
-    Diff,
+    #[group(multiple = false)]
+    Diff {
+        #[arg(long)]
+        /// Output the diff in an easily parsable json format
+        json: bool,
+        #[arg(long)]
+        /// Output the diff in an easily readable Markdown format
+        markdown: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -449,8 +457,13 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
 /// Prints what the next run would change, without fetching anything.
 ///
 /// Compares the pack's pins against the cache, both read off disk.
-pub fn diff(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<()> {
+pub fn diff(
+    out: &mut dyn std::io::Write,
+    rt: &Runtime,
+    format: Option<(bool, bool)>,
+) -> anyhow::Result<()> {
     if !crate::Cache::get_cache() {
+        // Let's return an actual error instead of a simple log
         return Err(anyhow!(
             "No cache located in the directory to diff against. Please run {} to generate a new cache.",
             String::from("sculkr").cyan()
@@ -479,7 +492,11 @@ pub fn diff(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<()> {
 
     log::debug!("diff against the pack: {diff:?}");
 
-    render_diff(out, &diff)
+    match format {
+        Some((true, _)) => render_diff_json(out, &diff),
+        Some((_, true)) => render_diff_markdown(out, &diff),
+        _ => render_diff(out, &diff),
+    }
 }
 
 /// Every mod the pack pins, as [`Cache::diff_against`] takes them.
@@ -568,6 +585,88 @@ where
         "      {}  {trailing}",
         format!("{:<width$}", fit(name, width)).bold()
     )?;
+    Ok(())
+}
+
+/// Writes the diff as pretty-printed JSON, shaped by [`cache::CacheDiff`]'s
+/// `Serialize` impl.
+fn render_diff_json(out: &mut dyn std::io::Write, diff: &cache::CacheDiff) -> anyhow::Result<()> {
+    serde_json::to_writer_pretty(&mut *out, diff)?;
+    // The serializer leaves off the trailing newline a shell expects.
+    writeln!(out)?;
+    Ok(())
+}
+
+/// Escapes the one character that would break a Markdown table cell.
+fn markdown_cell(text: &str) -> String {
+    text.replace('|', "\\|")
+}
+
+/// Writes the diff as Markdown tables, one per kind of change, with no
+/// terminal colors so it can be pasted into a PR or changelog.
+fn render_diff_markdown(
+    out: &mut dyn std::io::Write,
+    diff: &cache::CacheDiff,
+) -> anyhow::Result<()> {
+    writeln!(out, "## Changes since the last cached state")?;
+    writeln!(out)?;
+
+    if diff.is_empty() {
+        writeln!(out, "The cache already matches the pack; nothing to do.")?;
+        return Ok(());
+    }
+
+    if !diff.added.is_empty() {
+        writeln!(out, "### Added ({})", diff.added.len())?;
+        writeln!(out)?;
+        writeln!(out, "| Mod | Source |")?;
+        writeln!(out, "| --- | --- |")?;
+        for entry in &diff.added {
+            writeln!(
+                out,
+                "| {} | {} |",
+                markdown_cell(&entry.name),
+                entry.source.label()
+            )?;
+        }
+        writeln!(out)?;
+    }
+
+    if !diff.removed.is_empty() {
+        writeln!(out, "### Removed ({})", diff.removed.len())?;
+        writeln!(out)?;
+        writeln!(out, "| Mod | Source |")?;
+        writeln!(out, "| --- | --- |")?;
+        for entry in &diff.removed {
+            writeln!(
+                out,
+                "| {} | {} |",
+                markdown_cell(&entry.name),
+                entry.source.label()
+            )?;
+        }
+        writeln!(out)?;
+    }
+
+    if !diff.changed.is_empty() {
+        writeln!(out, "### Updated ({})", diff.changed.len())?;
+        writeln!(out)?;
+        writeln!(out, "| Mod | From | To |")?;
+        writeln!(out, "| --- | --- | --- |")?;
+        for change in &diff.changed {
+            writeln!(
+                out,
+                "| {} | {} | {} |",
+                markdown_cell(&change.name),
+                markdown_cell(&change.from),
+                markdown_cell(&change.to)
+            )?;
+        }
+        writeln!(out)?;
+    }
+
+    writeln!(out, "_{} mods, {} unchanged_", diff.total(), diff.unchanged)?;
+
     Ok(())
 }
 
@@ -823,7 +922,12 @@ output = "modlist.md"
         #[allow(dead_code)]
         fn subcommands_are_exhaustive(c: &Command) {
             match c {
-                Command::About | Command::Config | Command::Diff => {}
+                Command::About
+                | Command::Config
+                | Command::Diff {
+                    json: _,
+                    markdown: _,
+                } => {}
             }
         }
 
@@ -838,6 +942,8 @@ output = "modlist.md"
                 "about",
                 "config",
                 "diff",
+                "diff --json",
+                "diff --markdown",
                 "--verbose",
                 "--quiet",
                 "--path",
@@ -929,9 +1035,7 @@ output = "modlist.md"
         /// `render_diff` takes a `CacheDiff` directly, so the layout is
         /// pinned without a pack or a cache.
         fn render_the_diff(diff: &cache::CacheDiff) -> anyhow::Result<String> {
-            let mut buf = Vec::new();
-            render_diff(&mut buf, diff)?;
-            Ok(String::from_utf8(buf)?)
+            render_the_diff_with(render_diff, diff)
         }
 
         fn entry(id: &str, name: &str, source: cache::Source) -> cache::DiffEntry {
@@ -967,9 +1071,10 @@ output = "modlist.md"
             Ok(())
         }
 
-        #[test]
-        fn diff_reports_every_kind_of_change() -> anyhow::Result<()> {
-            let rendered = render_the_diff(&cache::CacheDiff {
+        /// A diff with something in every section, shared by each renderer's
+        /// snapshot so they all describe the same change.
+        fn every_kind_of_change() -> cache::CacheDiff {
+            cache::CacheDiff {
                 added: vec![
                     entry("YL57xq9U", "Iris Shaders", cache::Source::Modrinth),
                     entry("508933", "Distant Horizons", cache::Source::CurseForge),
@@ -982,11 +1087,66 @@ output = "modlist.md"
                     change("u6dRKJwZ", "JEI", "5101366", "19.21.1"),
                 ],
                 unchanged: 41,
-            })?;
+            }
+        }
+
+        /// Runs any of the diff renderers into a string.
+        fn render_the_diff_with(
+            render: fn(&mut dyn std::io::Write, &cache::CacheDiff) -> anyhow::Result<()>,
+            diff: &cache::CacheDiff,
+        ) -> anyhow::Result<String> {
+            let mut buf = Vec::new();
+            render(&mut buf, diff)?;
+            Ok(String::from_utf8(buf)?)
+        }
+
+        #[test]
+        fn diff_reports_every_kind_of_change() -> anyhow::Result<()> {
+            let rendered = render_the_diff(&every_kind_of_change())?;
 
             insta::with_settings!({filters => vec![(r"\x1b\[[0-9;]*m", "")]}, {
                 insta::assert_snapshot!(rendered);
             });
+            Ok(())
+        }
+
+        /// Markdown carries no color, so there is nothing to filter; a pipe in
+        /// a name is escaped rather than splitting its table row.
+        #[test]
+        fn diff_reports_markdown_info() -> anyhow::Result<()> {
+            let mut diff = every_kind_of_change();
+            diff.added
+                .push(entry("A1b2C3d4", "Pipes | Tubes", cache::Source::Modrinth));
+
+            let rendered = render_the_diff_with(render_diff_markdown, &diff)?;
+
+            anyhow::ensure!(
+                !rendered.contains('\x1b'),
+                "markdown output holds ANSI escapes"
+            );
+            anyhow::ensure!(
+                rendered.contains("| Pipes \\| Tubes | modrinth |"),
+                "a pipe in a mod name split its table row"
+            );
+            insta::assert_snapshot!(rendered);
+            Ok(())
+        }
+
+        /// The JSON is what scripts parse, so it must round-trip back into a
+        /// `CacheDiff` as well as match the snapshot.
+        #[test]
+        fn diff_reports_json_info() -> anyhow::Result<()> {
+            let diff = every_kind_of_change();
+            let rendered = render_the_diff_with(render_diff_json, &diff)?;
+
+            // Re-serializing the parsed diff compares every field at once.
+            let parsed: cache::CacheDiff = serde_json::from_str(&rendered)?;
+            anyhow::ensure!(
+                serde_json::to_value(&parsed)? == serde_json::to_value(&diff)?,
+                "the JSON did not round-trip back into the same diff"
+            );
+
+            insta::assert_snapshot!(rendered);
             Ok(())
         }
 

@@ -1,0 +1,49 @@
+---
+source: src/args.rs
+expression: rendered
+---
+{
+  "added": [
+    {
+      "id": "YL57xq9U",
+      "name": "Iris Shaders",
+      "source": "modrinth"
+    },
+    {
+      "id": "508933",
+      "name": "Distant Horizons",
+      "source": "curseforge"
+    }
+  ],
+  "removed": [
+    {
+      "id": "Bh37bMuy",
+      "name": "OptiFabric",
+      "source": "modrinth"
+    }
+  ],
+  "changed": [
+    {
+      "id": "AANobbMI",
+      "name": "Sodium",
+      "source": "modrinth",
+      "from": "0.6.0",
+      "to": "0.6.5"
+    },
+    {
+      "id": "gvQqBUqZ",
+      "name": "Lithium",
+      "source": "modrinth",
+      "from": "0.14.0",
+      "to": "0.14.3"
+    },
+    {
+      "id": "u6dRKJwZ",
+      "name": "JEI",
+      "source": "modrinth",
+      "from": "5101366",
+      "to": "19.21.1"
+    }
+  ],
+  "unchanged": 41
+}
