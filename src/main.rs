@@ -157,7 +157,7 @@ fn main() {
     let result: anyhow::Result<()> = match cli.command {
         Some(Command::Config) => args::config(&mut std::io::stdout().lock(), &cli, &loaded),
         Some(Command::About) => args::about(&mut std::io::stdout().lock()),
-        Some(Command::Diff) => args::diff(
+        Some(Command::Diff { json: _ }) => args::diff(
             &mut std::io::stdout().lock(),
             &Runtime::gather(&cli, &loaded),
         ),

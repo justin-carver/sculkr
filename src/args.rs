@@ -60,22 +60,22 @@ const HELP_STYLES: Styles = Styles::styled()
 )]
 pub struct Cli {
     /// Increase logging verbosity (-v, -vv, -vvv)
-    #[clap(short, long, action = ArgAction::Count, global = true)]
+    #[arg(short, long, action = ArgAction::Count, global = true)]
     pub(crate) verbose: u8,
 
     /// Suppress all non-error output
-    #[clap(short, long, global = true)]
+    #[arg(short, long, global = true)]
     pub(crate) quiet: bool,
 
     /// Set the default cache file
-    #[clap(long, global = true, value_name = "PATH")]
+    #[arg(long, global = true, value_name = "PATH")]
     pub(crate) cache: Option<String>,
 
     /// Sets the color mode [default: auto]
-    #[clap(short, long = "color-mode", value_enum, global = true)]
+    #[arg(short, long = "color-mode", value_enum, global = true)]
     pub(crate) color_mode: Option<ColorChoice>,
 
-    #[clap(
+    #[arg(
         short,
         long,
         global = true,
@@ -85,16 +85,16 @@ pub struct Cli {
     )]
     pub(crate) path: Option<PathBuf>,
 
-    #[clap(short, long, global = true, value_name = "PATH")]
+    #[arg(short, long, global = true, value_name = "PATH")]
     /// Sets a custom output path for the modlist [default: stdout]
     pub(crate) output: Option<PathBuf>,
 
     // TODO: Feels a little weird to have -f and -F, should these be changed?
-    #[clap(short = 'F', long, global = true)]
+    #[arg(short = 'F', long, global = true)]
     /// Forcibily overwrite a specified output file
     pub(crate) force: bool,
 
-    #[clap(long, global = true)]
+    #[arg(long, global = true)]
     /// Emit the whole pack as one JSON document instead of a formatted modlist
     pub(crate) json: bool,
 
@@ -105,7 +105,7 @@ pub struct Cli {
     /// than by the shell, so quote the template and write \n for a line break.
     // Left unset rather than defaulted, so a `.sculk` value can be told apart
     // from a flag the user actually passed. `format()` applies the default.
-    #[clap(
+    #[arg(
     long,
     short = 'f',
     allow_hyphen_values = true,
@@ -118,11 +118,11 @@ pub struct Cli {
     /// Takes any placeholder name from --format except INDEX, e.g. NAME, SLUG or
     /// AUTHORS. Numbers compare by value, so "Mod 2" sorts before "Mod 10", and
     /// mods with no value for the field are listed last.
-    #[clap(short, long, global = true, value_name = "FIELD", long_help = sort_by_long_help())]
+    #[arg(short, long, global = true, value_name = "FIELD", long_help = sort_by_long_help())]
     pub(crate) sort_by: Option<SortKey>,
 
     /// Reverses the sort, Z-A
-    #[clap(short, long, global = true)]
+    #[arg(short, long, global = true)]
     pub(crate) reverse: bool,
 
     #[command(subcommand)]
@@ -195,7 +195,10 @@ pub enum Command {
     /// Print the sculkr configuration to stdout
     Config,
     /// Output the diff(erence) between the last cache modpack data state, and the current
-    Diff,
+    Diff {
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -823,7 +826,7 @@ output = "modlist.md"
         #[allow(dead_code)]
         fn subcommands_are_exhaustive(c: &Command) {
             match c {
-                Command::About | Command::Config | Command::Diff => {}
+                Command::About | Command::Config | Command::Diff { json: _ } => {}
             }
         }
 
