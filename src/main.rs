@@ -157,9 +157,10 @@ fn main() {
     let result: anyhow::Result<()> = match cli.command {
         Some(Command::Config) => args::config(&mut std::io::stdout().lock(), &cli, &loaded),
         Some(Command::About) => args::about(&mut std::io::stdout().lock()),
-        Some(Command::Diff { json: _ }) => args::diff(
+        Some(Command::Diff { json, markdown }) => args::diff(
             &mut std::io::stdout().lock(),
             &Runtime::gather(&cli, &loaded),
+            Some((json, markdown)),
         ),
 
         None => run(&cli, &loaded, &pack_root).map_err(anyhow::Error::from),
