@@ -1,5 +1,6 @@
 use std::{any, env, path::PathBuf, process::ExitCode};
 
+use anyhow::{Result, anyhow};
 ///  All Code below relies on new `clap::` 4.0+ API! (Didn't pin it... for now...)
 ///  Perhaps consider moving this into a more centralized "command" file,
 ///  depending on future usage.
@@ -449,6 +450,13 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
 ///
 /// Compares the pack's pins against the cache, both read off disk.
 pub fn diff(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<()> {
+    if !crate::Cache::get_cache() {
+        return Err(anyhow!(
+            "No cache located in the directory to diff against. Please run {} to generate a new cache.",
+            String::from("sculkr").cyan()
+        ));
+    }
+
     let cache = Cache::load(&rt.cache)?;
 
     // Resolved as `run` does it: pack.toml names the index, and a pack
