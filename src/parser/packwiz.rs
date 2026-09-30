@@ -208,7 +208,7 @@ impl PackwizParser {
 
         let entries = directory.read_dir().path_ctx(&resolved, "read directory")?;
         let mut parsed_mods = Vec::new();
-        let mut skipped = 0usize;
+        let skipped = 0usize;
 
         for entry in entries {
             let entry = entry.path_ctx(&resolved, "read directory entry")?;
@@ -278,13 +278,13 @@ impl Parser for PackwizParser {
         (self.modrinth_mods, self.curseforge_mods)
     }
 
-    fn get_modrinth_mods(&self) -> Vec<ParsedModrinthId> {
-        self.modrinth_mods.clone()
-    }
+    // fn get_modrinth_mods(&self) -> Vec<ParsedModrinthId> {
+    //     self.modrinth_mods.clone()
+    // }
 
-    fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId> {
-        self.curseforge_mods.clone()
-    }
+    // fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId> {
+    //     self.curseforge_mods.clone()
+    // }
 }
 
 #[cfg(test)]

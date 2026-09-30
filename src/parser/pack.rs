@@ -59,6 +59,7 @@ pub struct PackVersions {
     pub other: BTreeMap<String, String>,
 }
 
+#[allow(dead_code)]
 impl PackVersions {
     /// The loader and its version, if the pack names one.
     pub fn loader(&self) -> Option<(&str, &str)> {
@@ -97,6 +98,7 @@ where
         .map(Path::to_path_buf)
 }
 
+#[allow(dead_code)]
 impl Pack {
     /// Looks for `pack.toml` in `start`, then in each ancestor.
     ///
@@ -136,6 +138,7 @@ impl Pack {
         toml::from_str(&data).map_err(|err| Error::TomlFile(path.to_owned(), err))
     }
 
+    #[allow(dead_code)]
     pub fn load_from<P>(pack_root: P) -> Result<Self, Error>
     where
         P: AsRef<Path>,

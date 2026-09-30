@@ -1,16 +1,13 @@
-#![allow(unused)]
-
 use std::path::PathBuf;
 
-use clap::{ColorChoice, CommandFactory, FromArgMatches, Parser, builder::Styles};
+use clap::{ColorChoice, CommandFactory, Parser};
 
 use crate::{
     app::App,
     args::{Cli, Command, Runtime},
     cache::Cache,
     error::Error,
-    format::Formatter,
-    parser::{packwiz::PackwizParser, text::TextParser},
+    parser::packwiz::PackwizParser,
     request::{Mod, curseforge::get_curseforge_mods, modrinth::get_modrinth_mods},
 };
 
@@ -157,7 +154,11 @@ fn main() {
     let result: anyhow::Result<()> = match cli.command {
         Some(Command::Config) => args::config(&mut std::io::stdout().lock(), &cli, &loaded),
         Some(Command::About) => args::about(&mut std::io::stdout().lock()),
-        Some(Command::Diff) => args::diff(
+        Some(Command::Diff {
+            json,
+            markdown,
+            format,
+        }) => args::diff(
             &mut std::io::stdout().lock(),
             &Runtime::gather(&cli, &loaded),
         ),

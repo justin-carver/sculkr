@@ -43,6 +43,7 @@ fn parse_line((n, line): (usize, &str)) -> Result<ParsedLine, ParseError> {
     }
 }
 
+#[allow(dead_code)]
 impl TextParser {
     pub fn new<S>(text: &S) -> Result<Self, Error>
     where
@@ -92,11 +93,11 @@ impl Parser for TextParser {
         (self.modrinth_mods, self.curseforge_mods)
     }
 
-    fn get_modrinth_mods(&self) -> Vec<ParsedModrinthId> {
-        self.modrinth_mods.clone()
-    }
+    // fn get_modrinth_mods(&self) -> Vec<ParsedModrinthId> {
+    //     self.modrinth_mods.clone()
+    // }
 
-    fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId> {
-        self.curseforge_mods.clone()
-    }
+    // fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId> {
+    //     self.curseforge_mods.clone()
+    // }
 }

@@ -194,7 +194,14 @@ pub enum Command {
     /// Print the sculkr configuration to stdout
     Config,
     /// Output the diff(erence) between the last cache modpack data state, and the current
-    Diff,
+    Diff {
+        #[clap(short, long)]
+        json: bool,
+        #[clap(short, long)]
+        markdown: bool,
+        #[clap(short, long)]
+        format: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -709,6 +716,7 @@ pub fn about(out: &mut dyn std::io::Write) -> anyhow::Result<()> {
     Ok(())
 }
 
+// TODO: This should *definitely* get moved into `src/tests/` at some point...
 // Tests
 #[cfg(test)]
 mod tests {
@@ -809,13 +817,22 @@ output = "modlist.md"
             }
         }
 
-        /// Adding a variant to [`Command`] breaks this match, which is the
-        /// reminder to extend `expected` below.
-        /// Don't add a default arm, or we'll fall through the test!
+        /// Adding a variant to [`Command`], or a field to one, breaks this
+        /// match, which is the reminder to extend `expected` below.
+        ///
+        /// The fields are matched against `_` rather than `..` so that a new
+        /// flag has to be spelled out here too. Don't add a default arm, or
+        /// we'll fall through the test!
         #[allow(dead_code)]
-        fn subcommands_are_exhaustive(c: &Command) {
-            match c {
-                Command::About | Command::Config | Command::Diff => {}
+        fn subcommands_are_exhaustive(command: &Command) {
+            match command {
+                Command::About
+                | Command::Config
+                | Command::Diff {
+                    json: _,
+                    markdown: _,
+                    format: _,
+                } => {}
             }
         }
 
@@ -830,6 +847,9 @@ output = "modlist.md"
                 "about",
                 "config",
                 "diff",
+                "diff --json",
+                "diff --markdown",
+                "diff --format",
                 "--verbose",
                 "--quiet",
                 "--path",

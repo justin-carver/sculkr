@@ -23,6 +23,6 @@ pub struct ParsedCurseForgeId {
 
 pub trait Parser: Sized {
     fn get_mods_owned(self) -> (Vec<ParsedModrinthId>, Vec<ParsedCurseForgeId>);
-    fn get_modrinth_mods(&self) -> Vec<ParsedModrinthId>;
-    fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId>;
+    // fn get_modrinth_mods(&self) -> Vec<ParsedModrinthId>;
+    // fn get_curseforge_mods(&self) -> Vec<ParsedCurseForgeId>;
 }
