@@ -155,9 +155,9 @@ fn main() {
         Some(Command::Config) => args::config(&mut std::io::stdout().lock(), &cli, &loaded),
         Some(Command::About) => args::about(&mut std::io::stdout().lock()),
         Some(Command::Diff {
-            json,
-            markdown,
-            format,
+            json: _,
+            markdown: _,
+            format: _,
         }) => args::diff(
             &mut std::io::stdout().lock(),
             &Runtime::gather(&cli, &loaded),

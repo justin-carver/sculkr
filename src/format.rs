@@ -13,7 +13,7 @@ use std::{
     str::{Chars, FromStr},
 };
 
-use serde_with::{DeserializeFromStr, formats::Format};
+use serde_with::DeserializeFromStr;
 
 use crate::request::Mod;
 
@@ -400,6 +400,7 @@ impl Formatter {
         Ok(Self { segments })
     }
 
+    #[allow(dead_code)]
     /// Renders one mod at `position`, a one-based place in the list.
     pub fn render(&self, m: &Mod, position: usize) -> String {
         let mut out = String::new();

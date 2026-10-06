@@ -247,6 +247,7 @@ impl Cache {
         }
     }
 
+    #[allow(dead_code)]
     /// Very similar to [`crate::parser::pack`], except that nothing at `path` is
     /// `None` rather than an empty cache, since [`Self::load`] cannot tell the
     /// caller which of the two it found.
@@ -300,10 +301,11 @@ impl Cache {
         );
     }
 
-    pub fn set_data(&mut self, data: CacheData) {
-        self.data.extend(data);
-        self.is_dirty = true;
-    }
+    // TODO: We are not manually setting up cache data at the moment.
+    // pub fn set_data(&mut self, data: CacheData) {
+    //     self.data.extend(data);
+    //     self.is_dirty = true;
+    // }
 
     pub const fn get_data(&self) -> &CacheData {
         &self.data

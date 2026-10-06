@@ -85,11 +85,9 @@ pub fn get_curseforge_mods(ids: &[CurseForgeId], key: Option<&Secret>) -> Result
     if response.status_code == 200 {
         response
             .json::<ResponseJson>()
-            .map_err(|err| {
-                (match response.as_str() {
-                    Ok(json) => (json, err).into(),
-                    Err(err) => err.into(),
-                })
+            .map_err(|err| match response.as_str() {
+                Ok(json) => (json, err).into(),
+                Err(err) => err.into(),
             })
             .map(|m| m.data)
     } else {

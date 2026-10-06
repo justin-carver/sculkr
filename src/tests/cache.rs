@@ -802,11 +802,12 @@ mod preflight {
         assert_eq!(Cache::previous_caches(dir.path()), EMPTY_PATHBUF);
     }
 
+    #[allow(clippy::no_effect_underscore_binding)]
     #[test]
     fn a_directory_named_like_an_old_cache_is_not_one() {
         let dir = TempDir::new("cache-previous-directory");
         fs::create_dir(dir.join(".packwiz-modlist.cache.json")).expect("create fixture directory");
-        let safe_wrap: [PathBuf; 0] = [];
+        let _safe_wrap: [PathBuf; 0] = [];
         assert_eq!(Cache::previous_caches(dir.path()), EMPTY_PATHBUF);
     }
 

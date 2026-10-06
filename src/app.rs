@@ -1,12 +1,10 @@
 use std::{
-    cell::{RefCell, RefMut},
+    cell::RefCell,
     collections::{HashMap, HashSet},
     fs::File,
     io::{BufWriter, Write},
     path::Path,
 };
-
-use colored::Colorize;
 
 use crate::{
     Cache, Error, Mod,

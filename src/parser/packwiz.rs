@@ -215,7 +215,7 @@ impl PackwizParser {
             let path = entry.path();
 
             if !entry.file_name().to_string_lossy().ends_with(".pw.toml") {
-                skipped.saturating_add(1);
+                let _ = skipped.saturating_add(1);
                 log::trace!("skipping non-pw.toml entry \"{}\"", path.display());
                 continue;
             }

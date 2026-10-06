@@ -6,11 +6,9 @@
 //! `build.rs` enforces that: it fails the build if a compile-time variable
 //! lookup shows up anywhere under `src/`.
 
-use std::{fmt, path::PathBuf};
+use std::fmt;
 
 use serde::{Deserialize, Deserializer};
-
-use crate::error::Error;
 
 pub const CF_API_KEY: &str = "CF_API_KEY";
 

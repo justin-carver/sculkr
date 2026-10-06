@@ -1,14 +1,13 @@
-use std::{any, env, path::PathBuf, process::ExitCode};
+use std::{env, path::PathBuf};
 
 ///  All Code below relies on new `clap::` 4.0+ API! (Didn't pin it... for now...)
 ///  Perhaps consider moving this into a more centralized "command" file,
 ///  depending on future usage.
 use clap::{
-    ArgAction, Args, ColorChoice, CommandFactory, Parser, Subcommand, ValueEnum, ValueHint,
+    ArgAction, ColorChoice, Parser, Subcommand, ValueHint,
     builder::{Styles, styling::AnsiColor},
 };
 use colored::Colorize;
-use serde_with::SerializeDisplay;
 
 use crate::{cache, cache::Cache, format::SortKey};
 
@@ -234,10 +233,9 @@ impl Verbosity {
 }
 
 fn write_fancy_header(out: &mut dyn std::io::Write, subtitle: &str) -> anyhow::Result<()> {
-    writeln!(out);
     writeln!(
         out,
-        "  {} {} {}",
+        "\n  {} {} {}",
         "⣿".cyan(),
         "sculkr".bold().cyan(),
         "⣿".cyan()
@@ -344,7 +342,7 @@ pub fn config(
 /// Split from [`config`] so the layout can be tested without a pack, a cache,
 /// or a key in the environment. Yay, testing!
 fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<()> {
-    write_fancy_header(out, "Runtime Configuration");
+    let _ = write_fancy_header(out, "Runtime Configuration");
 
     // General sculkr configs, does not need fancy_divider
     match rt.config_sources.split_first() {
@@ -391,7 +389,7 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
     )?;
 
     // Modpack config items
-    write_fancy_divider(out, "Modpack");
+    let _ = write_fancy_divider(out, "Modpack");
     writeln!(
         out,
         "  {:<12} {}",
@@ -430,7 +428,7 @@ fn render_config(out: &mut dyn std::io::Write, rt: &Runtime) -> anyhow::Result<(
         )?,
     }
 
-    write_fancy_divider(out, "Secrets");
+    let _ = write_fancy_divider(out, "Secrets");
     match &rt.api_key {
         Some((fingerprint, source)) => writeln!(
             out,
@@ -679,7 +677,7 @@ fn write_diff_hint(out: &mut dyn std::io::Write, diff: &cache::CacheDiff) -> any
 }
 
 pub fn about(out: &mut dyn std::io::Write) -> anyhow::Result<()> {
-    write_fancy_header(out, &format!("Companion CLI for {}", "packwiz".yellow()));
+    let _ = write_fancy_header(out, &format!("Companion CLI for {}", "packwiz".yellow()));
 
     writeln!(
         out,

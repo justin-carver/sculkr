@@ -1,10 +1,6 @@
-use std::{
-    fmt::{Display, Formatter},
-    path::PathBuf,
-};
+use std::path::PathBuf;
 
 use colored::Colorize;
-use minreq::Response;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
