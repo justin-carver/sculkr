@@ -248,6 +248,13 @@ impl Cache {
     }
 
     #[allow(dead_code)]
+    /// Determines if there is a current or existing cache file located at the
+    /// [`crate::cache::CACHE_PATH`] directory
+    pub fn get_cache() -> bool {
+        let file = &crate::cache::CACHE_PATH.to_string();
+        OpenOptions::new().read(true).open(file).is_ok()
+    }
+
     /// Very similar to [`crate::parser::pack`], except that nothing at `path` is
     /// `None` rather than an empty cache, since [`Self::load`] cannot tell the
     /// caller which of the two it found.

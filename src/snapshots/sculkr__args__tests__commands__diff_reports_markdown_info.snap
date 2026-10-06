@@ -1,0 +1,29 @@
+---
+source: src/args.rs
+expression: rendered
+---
+## Changes since the last cached state
+
+### Added (3)
+
+| Mod | Source |
+| --- | --- |
+| Iris Shaders | modrinth |
+| Distant Horizons | curseforge |
+| Pipes \| Tubes | modrinth |
+
+### Removed (1)
+
+| Mod | Source |
+| --- | --- |
+| OptiFabric | modrinth |
+
+### Updated (3)
+
+| Mod | From | To |
+| --- | --- | --- |
+| Sodium | 0.6.0 | 0.6.5 |
+| Lithium | 0.14.0 | 0.14.3 |
+| JEI | 5101366 | 19.21.1 |
+
+_47 mods, 41 unchanged_
