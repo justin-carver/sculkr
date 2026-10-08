@@ -13,6 +13,7 @@ expression: pretty
       ],
       "cache_id": "v1",
       "description": "Sodium does things",
+      "first_seen": "[TIMESTAMP]",
       "icon_url": "https://cdn.modrinth.com/AANobbMI.webp",
       "id": "AANobbMI",
       "issues_url": null,
@@ -22,9 +23,11 @@ expression: pretty
         "url": null
       },
       "mod_url": "https://modrinth.com/mod/AANobbMI",
+      "retain_only": true,
       "slug": "sodium",
       "source_url": "https://github.com/someone/AANobbMI",
       "title": "Sodium",
+      "version_changed": "[TIMESTAMP]",
       "version_name": "0.6.5",
       "wiki_url": null
     }

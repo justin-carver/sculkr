@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -49,6 +50,15 @@ pub struct CacheMod {
     /// The release `cache_id` pins. `None` when the pack did not name one.
     #[serde(default)]
     pub version_name: Option<String>,
+    /// When this project id first appeared in the pack.
+    /// Never overwritten while the entry survives.
+    pub first_seen: Option<DateTime<Utc>>,
+    /// When the pinned version last changed.
+    /// Overwritten whenever `cache_id` does.
+    pub version_changed: Option<DateTime<Utc>>,
+    /// see [`Self::retain_only`] below regarding this timestamp being modified by pack removals
+    #[serde(default)]
+    retain_only: bool,
     #[serde(flatten)]
     pub data: Mod,
 }
@@ -247,6 +257,8 @@ impl Cache {
         }
     }
 
+    // TODO: Probably should not be called `get_cache` if it does not return a cache...
+    //
     /// Determines if there is a current or existing cache file located at the
     /// [`crate::cache::CACHE_PATH`] directory
     pub fn get_cache() -> bool {
@@ -356,6 +368,13 @@ impl Cache {
         let prev_mod = self.data.insert(id.mod_id.clone(), CacheMod {
             cache_id: id.cache_id.clone(),
             version_name: id.version_name.clone(),
+            first_seen: Self::get_data(self)
+                .get(&id.cache_id)
+                .map_or_else(|| Some(Utc::now()), |cmod| cmod.first_seen),
+            version_changed: Self::get_data(self)
+                .get(&id.cache_id)
+                .map_or_else(|| Some(Utc::now()), |cmod| cmod.version_changed),
+            retain_only: true, // DEBUG: Hardcoded value for now
             data,
         });
 

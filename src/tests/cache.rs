@@ -677,7 +677,14 @@ mod save {
                 .expect("saved file is JSON");
         let pretty = serde_json::to_string_pretty(&written).expect("pretty-print");
 
-        insta::assert_snapshot!(pretty);
+        // `first_seen` and `version_changed` are stamped with `Utc::now()`, so
+        // they differ on every run. Masking only a well-formed RFC 3339 instant
+        // keeps the fields pinned: a `null` or a different format still fails.
+        insta::with_settings!({filters => vec![
+            (r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z", "[TIMESTAMP]"),
+        ]}, {
+            insta::assert_snapshot!(pretty);
+        });
     }
 }
 
