@@ -146,6 +146,66 @@ mod lookup {
     }
 }
 
+/// [`Cache::set_mod`] stamping: `first_seen` lasts as long as the entry does,
+/// and `version_changed` moves only when the pinned version does.
+mod timestamps {
+    use super::*;
+
+    /// Pushes both stamps on Sodium into the past, so a restamp is later
+    /// whatever the clock resolution, and returns that instant.
+    fn backdate(cache: &mut Cache) -> DateTime<Utc> {
+        let long_ago = DateTime::<Utc>::UNIX_EPOCH;
+        let entry = cache
+            .data
+            .get_mut("AANobbMI")
+            .expect("fixture holds Sodium");
+        entry.first_seen = Some(long_ago);
+        entry.version_changed = Some(long_ago);
+
+        long_ago
+    }
+
+    #[test]
+    fn a_new_entry_gets_both_stamps() {
+        let cache = populated();
+
+        let entry = &cache.data["AANobbMI"];
+
+        assert!(entry.first_seen.is_some());
+        assert!(entry.version_changed.is_some());
+    }
+
+    #[test]
+    fn setting_the_same_version_again_keeps_both_stamps() {
+        let mut cache = populated();
+        let long_ago = backdate(&mut cache);
+
+        cache.set_mod(modrinth("AANobbMI", "v1"), sample_mod("AANobbMI", "Sodium"));
+
+        let entry = &cache.data["AANobbMI"];
+        assert_eq!(entry.first_seen, Some(long_ago));
+        assert_eq!(entry.version_changed, Some(long_ago));
+    }
+
+    #[test]
+    fn a_new_version_restamps_version_changed_but_not_first_seen() {
+        let mut cache = populated();
+        let long_ago = backdate(&mut cache);
+
+        cache.set_mod(
+            modrinth("AANobbMI", "v2"),
+            sample_mod("AANobbMI", "Sodium Next"),
+        );
+
+        let entry = &cache.data["AANobbMI"];
+        assert_eq!(entry.first_seen, Some(long_ago));
+        assert!(
+            entry.version_changed > Some(long_ago),
+            "the stamp must move when the pinned version does"
+        );
+    }
+}
+
 /// [`Cache::diff_against`]: what the next run would do, compared against the
 /// pack without fetching anything.
 mod diff_against {

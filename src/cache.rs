@@ -369,10 +369,10 @@ impl Cache {
             cache_id: id.cache_id.clone(),
             version_name: id.version_name.clone(),
             first_seen: Self::get_data(self)
-                .get(&id.cache_id)
+                .get(&id.mod_id)
                 .map_or_else(|| Some(Utc::now()), |cmod| cmod.first_seen),
             version_changed: Self::get_data(self)
-                .get(&id.cache_id)
+                .get(&id.mod_id)
                 .map_or_else(|| Some(Utc::now()), |cmod| cmod.version_changed),
             retain_only: true, // DEBUG: Hardcoded value for now
             data,
@@ -380,13 +380,20 @@ impl Cache {
 
         match prev_mod {
             // The version of the mod has changed, so lets update the `CacheDiff`.
-            Some(pm) if id.cache_id != pm.cache_id => self.diff.changed.push(VersionChange {
-                id: id.mod_id,
-                name,
-                source,
-                from: version_label(pm.version_name.as_deref(), &pm.cache_id),
-                to: version_label(id.version_name.as_deref(), &id.cache_id),
-            }),
+            Some(pm) if id.cache_id != pm.cache_id => {
+                // restamp it now the pin has moved.
+                if let Some(entry) = self.data.get_mut(&id.mod_id) {
+                    entry.version_changed = Some(Utc::now());
+                }
+
+                self.diff.changed.push(VersionChange {
+                    id: id.mod_id,
+                    name,
+                    source,
+                    from: version_label(pm.version_name.as_deref(), &pm.cache_id),
+                    to: version_label(id.version_name.as_deref(), &id.cache_id),
+                });
+            }
             // This is the exact same mod, do not update the diff
             Some(_) => (),
             // This is a brand new mod being added to the cache
